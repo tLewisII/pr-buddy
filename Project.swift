@@ -1,5 +1,7 @@
 import ProjectDescription
 
+let macOSDeploymentTarget = "26.1"
+
 let project = Project(
     name: "pr-buddy",
     options: .options(
@@ -13,7 +15,7 @@ let project = Project(
             "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
             "GCC_C_LANGUAGE_STANDARD": "gnu17",
             "LOCALIZATION_PREFERS_STRING_CATALOGS": "YES",
-            "MACOSX_DEPLOYMENT_TARGET": "26.1",
+            "MACOSX_DEPLOYMENT_TARGET": .string(macOSDeploymentTarget),
             "SDKROOT": "macosx",
             "SWIFT_VERSION": "6.0",
         ],
@@ -40,7 +42,7 @@ let project = Project(
             destinations: .macOS,
             product: .staticLibrary,
             bundleId: "com.terrylewis.pr-buddy.core",
-            deploymentTargets: .macOS("26.1"),
+            deploymentTargets: .macOS(macOSDeploymentTarget),
             infoPlist: .default,
             sources: ["pr-buddy/**"],
             settings: .settings(base: [
@@ -54,7 +56,7 @@ let project = Project(
             destinations: .macOS,
             product: .commandLineTool,
             bundleId: "com.terrylewis.pr-buddy",
-            deploymentTargets: .macOS("26.1"),
+            deploymentTargets: .macOS(macOSDeploymentTarget),
             infoPlist: .default,
             sources: ["pr-buddyCLI/**"],
             dependencies: [
@@ -74,7 +76,7 @@ let project = Project(
             destinations: .macOS,
             product: .unitTests,
             bundleId: "com.terrylewis.pr-buddyTests",
-            deploymentTargets: .macOS("26.1"),
+            deploymentTargets: .macOS(macOSDeploymentTarget),
             infoPlist: .default,
             sources: ["pr-buddyTests/**"],
             dependencies: [

@@ -2,10 +2,12 @@
 
 import PackageDescription
 
+let macOSDeploymentTarget = "26.1"
+
 let package = Package(
     name: "pr-buddy",
     platforms: [
-        .macOS("26.1")
+        .macOS(macOSDeploymentTarget)
     ],
     products: [
         .executable(name: "pr-buddy", targets: ["pr-buddyCLI"])
