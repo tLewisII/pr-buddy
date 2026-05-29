@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "pr-buddy",
     platforms: [
-        .macOS(.v15)
+        .macOS("26.1")
     ],
     products: [
         .executable(name: "pr-buddy", targets: ["pr-buddyCLI"])
