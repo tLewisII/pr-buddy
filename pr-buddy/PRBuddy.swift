@@ -1,0 +1,710 @@
+//
+//  main.swift
+//  pr-buddy
+//
+//  Created by Terry Lewis II on 5/25/26.
+//
+
+import Darwin
+import Foundation
+
+struct Options {
+    var repo: String?
+    var search: String?
+    var labels: [String] = []
+    var statuses: [String] = []
+    var minChangedFiles: Int?
+    var maxChangedFiles: Int?
+    var limit = 50
+    var showHelp = false
+}
+
+struct PullRequest: Decodable {
+    struct Author: Decodable {
+        let login: String?
+    }
+
+    struct Label: Decodable {
+        let name: String
+    }
+
+    let number: Int
+    let title: String
+    let author: Author?
+    let headRefName: String?
+    let baseRefName: String?
+    let state: String
+    let isDraft: Bool
+    let reviewDecision: String?
+    let changedFiles: Int?
+    let labels: [Label]
+    let updatedAt: String?
+    let url: String
+
+    var statusSummary: String {
+        if isDraft {
+            return "draft"
+        }
+
+        return state.lowercased()
+    }
+
+    var reviewSummary: String {
+        guard let reviewDecision else {
+            return "-"
+        }
+
+        return reviewDecision
+            .replacingOccurrences(of: "_", with: " ")
+            .lowercased()
+    }
+
+    var labelSummary: String {
+        labels.map(\.name).joined(separator: ", ")
+    }
+}
+
+enum AppError: Error, CustomStringConvertible {
+    case invalidArguments(String)
+    case commandFailed(String)
+    case decodingFailed(String)
+
+    var description: String {
+        switch self {
+        case .invalidArguments(let message), .commandFailed(let message), .decodingFailed(let message):
+            return message
+        }
+    }
+}
+
+struct PRBuddy {
+    static func main() {
+        do {
+            let options = try parseOptions(Array(CommandLine.arguments.dropFirst()))
+
+            if options.showHelp {
+                printUsage()
+                return
+            }
+
+            let pullRequests = try fetchPullRequests(options: options)
+                .filter { matchesFilters($0, options: options) }
+
+            if pullRequests.isEmpty {
+                print("No pull requests matched the current filters.")
+                return
+            }
+
+            if isatty(STDIN_FILENO) != 0 {
+                try runInteractiveTUI(initialPullRequests: pullRequests, options: options)
+            } else {
+                printTable(pullRequests)
+            }
+        } catch {
+            fputs("pr-buddy: \(error)\n", stderr)
+            fputs("Run `pr-buddy --help` for usage.\n", stderr)
+            exit(1)
+        }
+    }
+
+    static func parseOptions(_ arguments: [String]) throws -> Options {
+        var options = Options()
+        var index = 0
+
+        while index < arguments.count {
+            let argument = arguments[index]
+
+            switch argument {
+            case "--help", "-h":
+                options.showHelp = true
+            case "--repo", "-R":
+                options.repo = try value(after: argument, in: arguments, index: &index)
+            case "--search", "-s":
+                options.search = try value(after: argument, in: arguments, index: &index)
+            case "--label", "-l":
+                options.labels.append(contentsOf: splitCSV(try value(after: argument, in: arguments, index: &index)))
+            case "--status":
+                options.statuses.append(contentsOf: splitCSV(try value(after: argument, in: arguments, index: &index)))
+            case "--min-files":
+                options.minChangedFiles = try parseInt(try value(after: argument, in: arguments, index: &index), option: argument)
+            case "--max-files":
+                options.maxChangedFiles = try parseInt(try value(after: argument, in: arguments, index: &index), option: argument)
+            case "--changed-files":
+                try parseChangedFilesRange(try value(after: argument, in: arguments, index: &index), into: &options)
+            case "--limit":
+                options.limit = try parseInt(try value(after: argument, in: arguments, index: &index), option: argument)
+            default:
+                throw AppError.invalidArguments("Unknown option: \(argument)")
+            }
+
+            index += 1
+        }
+
+        if let minChangedFiles = options.minChangedFiles,
+           let maxChangedFiles = options.maxChangedFiles,
+           minChangedFiles > maxChangedFiles {
+            throw AppError.invalidArguments("--min-files cannot be greater than --max-files.")
+        }
+
+        if options.limit < 1 {
+            throw AppError.invalidArguments("--limit must be greater than zero.")
+        }
+
+        if let repo = options.repo, repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw AppError.invalidArguments("--repo cannot be empty.")
+        }
+
+        return options
+    }
+
+    private static func value(after option: String, in arguments: [String], index: inout Int) throws -> String {
+        let valueIndex = index + 1
+
+        guard valueIndex < arguments.count else {
+            throw AppError.invalidArguments("Missing value for \(option).")
+        }
+
+        index = valueIndex
+        return arguments[valueIndex]
+    }
+
+    private static func splitCSV(_ value: String) -> [String] {
+        value
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func parseInt(_ value: String, option: String) throws -> Int {
+        guard let integer = Int(value) else {
+            throw AppError.invalidArguments("\(option) expects a number.")
+        }
+
+        return integer
+    }
+
+    private static func parseChangedFilesRange(_ value: String, into options: inout Options) throws {
+        if value.contains("...") {
+            throw AppError.invalidArguments("--changed-files uses two dots, for example 2..8.")
+        }
+
+        let parts = value.components(separatedBy: "..")
+
+        switch parts.count {
+        case 1:
+            let count = try parseInt(parts[0], option: "--changed-files")
+            options.minChangedFiles = count
+            options.maxChangedFiles = count
+        case 2:
+            if !parts[0].isEmpty {
+                options.minChangedFiles = try parseInt(parts[0], option: "--changed-files")
+            }
+
+            if !parts[1].isEmpty {
+                options.maxChangedFiles = try parseInt(parts[1], option: "--changed-files")
+            }
+        default:
+            throw AppError.invalidArguments("--changed-files expects a number or range, for example 3, 2..8, ..5, or 10..")
+        }
+    }
+
+    private static func fetchPullRequests(options: Options) throws -> [PullRequest] {
+        var arguments = [
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            String(options.limit),
+            "--json",
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,labels,updatedAt,url"
+        ]
+
+        appendRepoArgument(options.repo, to: &arguments)
+
+        if let search = options.search, !search.isEmpty {
+            arguments.append(contentsOf: ["--search", search])
+        }
+
+        for label in options.labels {
+            arguments.append(contentsOf: ["--label", label])
+        }
+
+        let result = try runCommand("gh", arguments: arguments)
+
+        guard result.exitCode == 0 else {
+            throw AppError.commandFailed(result.stderr.isEmpty ? "gh pr list failed." : result.stderr)
+        }
+
+        do {
+            return try JSONDecoder().decode([PullRequest].self, from: result.stdoutData)
+        } catch {
+            throw AppError.decodingFailed("Could not parse `gh pr list` output: \(error)")
+        }
+    }
+
+    static func matchesFilters(_ pullRequest: PullRequest, options: Options) -> Bool {
+        if let minChangedFiles = options.minChangedFiles,
+           (pullRequest.changedFiles ?? 0) < minChangedFiles {
+            return false
+        }
+
+        if let maxChangedFiles = options.maxChangedFiles,
+           (pullRequest.changedFiles ?? 0) > maxChangedFiles {
+            return false
+        }
+
+        if !options.labels.isEmpty {
+            let pullRequestLabels = Set(pullRequest.labels.map { normalized($0.name) })
+            let requiredLabels = options.labels.map(normalized)
+
+            guard requiredLabels.allSatisfy({ pullRequestLabels.contains($0) }) else {
+                return false
+            }
+        }
+
+        if !options.statuses.isEmpty {
+            let requestedStatuses = Set(options.statuses.map(normalized))
+            let availableStatuses = Set(statusTokens(for: pullRequest))
+
+            guard !requestedStatuses.isDisjoint(with: availableStatuses) else {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    static func statusTokens(for pullRequest: PullRequest) -> [String] {
+        var statuses = [
+            normalized(pullRequest.state),
+            pullRequest.isDraft ? "draft" : "ready"
+        ]
+
+        if let reviewDecision = pullRequest.reviewDecision {
+            statuses.append(normalized(reviewDecision))
+        }
+
+        return statuses
+    }
+
+    static func normalized(_ value: String) -> String {
+        value
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static func printTable(_ pullRequests: [PullRequest]) {
+        let headers = ["Idx", "PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
+        let rows = tableRows(for: pullRequests)
+
+        let widths = columnWidths(headers: headers, rows: rows)
+        print(renderRow(headers, widths: widths))
+        print(widths.map { String(repeating: "-", count: $0) }.joined(separator: "  "))
+
+        for row in rows {
+            print(renderRow(row, widths: widths))
+        }
+    }
+
+    static func tableRows(for pullRequests: [PullRequest]) -> [[String]] {
+        pullRequests.enumerated().map { index, pullRequest in
+            [
+                String(index + 1),
+                "#\(pullRequest.number)",
+                pullRequest.changedFiles.map(String.init) ?? "-",
+                pullRequest.statusSummary,
+                pullRequest.reviewSummary,
+                pullRequest.labelSummary.isEmpty ? "-" : pullRequest.labelSummary,
+                pullRequest.title,
+                pullRequest.author?.login ?? "-"
+            ]
+        }
+    }
+
+    static func columnWidths(headers: [String], rows: [[String]]) -> [Int] {
+        let maximumWidths = [3, 6, 5, 8, 18, 24, 72, 24]
+
+        return headers.indices.map { column in
+            let contentWidth = ([headers[column]] + rows.map { $0[column] })
+                .map(\.count)
+                .max() ?? headers[column].count
+
+            return min(maximumWidths[column], max(headers[column].count, contentWidth))
+        }
+    }
+
+    static func renderRow(_ row: [String], widths: [Int]) -> String {
+        row.enumerated()
+            .map { column, value in
+                let text = truncate(value, to: widths[column])
+                return text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+            }
+            .joined(separator: "  ")
+    }
+
+    static func truncate(_ value: String, to width: Int) -> String {
+        guard value.count > width else {
+            return value
+        }
+
+        guard width > 1 else {
+            return String(value.prefix(width))
+        }
+
+        guard width > 3 else {
+            return String(value.prefix(width))
+        }
+
+        return String(value.prefix(width - 3)) + "..."
+    }
+
+    private static func runInteractiveTUI(initialPullRequests: [PullRequest], options: Options) throws {
+        let terminalMode = try RawTerminalMode()
+        defer {
+            terminalMode.restore()
+            showCursor()
+            clearScreen()
+        }
+
+        var pullRequests = initialPullRequests
+        var selectedIndex = 0
+        var topIndex = 0
+        var message = "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
+
+        hideCursor()
+
+        while true {
+            if pullRequests.isEmpty {
+                selectedIndex = 0
+                topIndex = 0
+            } else {
+                selectedIndex = min(max(selectedIndex, 0), pullRequests.count - 1)
+                let visibleRows = max(1, terminalHeight() - 8)
+
+                if selectedIndex < topIndex {
+                    topIndex = selectedIndex
+                } else if selectedIndex >= topIndex + visibleRows {
+                    topIndex = selectedIndex - visibleRows + 1
+                }
+            }
+
+            drawTUI(
+                pullRequests: pullRequests,
+                selectedIndex: selectedIndex,
+                topIndex: topIndex,
+                options: options,
+                message: message
+            )
+
+            switch readKey() {
+            case .up, .k:
+                selectedIndex = max(0, selectedIndex - 1)
+                message = ""
+            case .down, .j:
+                selectedIndex = min(max(0, pullRequests.count - 1), selectedIndex + 1)
+                message = ""
+            case .enter, .v:
+                guard !pullRequests.isEmpty else {
+                    message = "No pull requests to view."
+                    continue
+                }
+
+                showCommandResult(
+                    title: "PR #\(pullRequests[selectedIndex].number)",
+                    result: try runPRCommand(["view", String(pullRequests[selectedIndex].number)], repo: options.repo)
+                )
+                message = "Returned from details."
+            case .c:
+                guard !pullRequests.isEmpty else {
+                    message = "No pull requests to checkout."
+                    continue
+                }
+
+                showCommandResult(
+                    title: "Checkout #\(pullRequests[selectedIndex].number)",
+                    result: try runPRCommand(["checkout", String(pullRequests[selectedIndex].number)], repo: options.repo)
+                )
+                message = "Checkout command finished."
+            case .o:
+                guard !pullRequests.isEmpty else {
+                    message = "No pull requests to open."
+                    continue
+                }
+
+                let result = try runPRCommand(["view", String(pullRequests[selectedIndex].number), "--web"], repo: options.repo)
+                message = result.exitCode == 0 ? "Opened #\(pullRequests[selectedIndex].number) in browser." : result.stderr
+            case .r:
+                pullRequests = try fetchPullRequests(options: options)
+                    .filter { matchesFilters($0, options: options) }
+                selectedIndex = min(selectedIndex, max(0, pullRequests.count - 1))
+                message = "Refreshed \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
+            case .q:
+                return
+            case .unknown:
+                message = "Use arrows/j/k to move, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+            }
+        }
+    }
+
+    private static func drawTUI(
+        pullRequests: [PullRequest],
+        selectedIndex: Int,
+        topIndex: Int,
+        options: Options,
+        message: String
+    ) {
+        let headers = ["Idx", "PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
+        let rows = tableRows(for: pullRequests)
+        let widths = columnWidths(headers: headers, rows: rows)
+        let visibleRows = max(1, terminalHeight() - 8)
+        let endIndex = min(rows.count, topIndex + visibleRows)
+        let repoText = options.repo ?? "current repository"
+        let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
+
+        clearScreen()
+        print("pr-buddy  \(repoText)")
+        print("Showing \(shownRange).  arrows/j/k move  enter/v view  c checkout  o open  r refresh  q quit")
+        print(message.isEmpty ? " " : message)
+        print("")
+        print("  " + renderRow(headers, widths: widths))
+        print("  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  "))
+
+        if rows.isEmpty {
+            print("  No pull requests matched the current filters.")
+            fflush(stdout)
+            return
+        }
+
+        for index in topIndex..<endIndex {
+            let marker = index == selectedIndex ? ">" : " "
+            let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
+
+            if index == selectedIndex {
+                print("\u{001B}[7m\(rendered)\u{001B}[0m")
+            } else {
+                print(rendered)
+            }
+        }
+
+        fflush(stdout)
+    }
+
+    private static func showCommandResult(title: String, result: CommandResult) {
+        clearScreen()
+        print(title)
+        print(String(repeating: "-", count: title.count))
+
+        if !result.stdout.isEmpty {
+            print(result.stdout)
+        }
+
+        if !result.stderr.isEmpty {
+            print(result.stderr)
+        }
+
+        if result.stdout.isEmpty && result.stderr.isEmpty {
+            print("Command completed with no output.")
+        }
+
+        print("")
+        print("Press any key to return to the PR list.")
+        fflush(stdout)
+        _ = readKey()
+    }
+
+    private static func terminalHeight() -> Int {
+        var size = winsize()
+
+        guard ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0, size.ws_row > 0 else {
+            return 24
+        }
+
+        return Int(size.ws_row)
+    }
+
+    private static func clearScreen() {
+        print("\u{001B}[2J\u{001B}[H", terminator: "")
+    }
+
+    private static func hideCursor() {
+        print("\u{001B}[?25l", terminator: "")
+    }
+
+    private static func showCursor() {
+        print("\u{001B}[?25h", terminator: "")
+    }
+
+    private static func runPRCommand(_ arguments: [String], repo: String?) throws -> CommandResult {
+        var ghArguments = ["pr"] + arguments
+        appendRepoArgument(repo, to: &ghArguments)
+        return try runCommand("gh", arguments: ghArguments)
+    }
+
+    private static func appendRepoArgument(_ repo: String?, to arguments: inout [String]) {
+        guard let repo, !repo.isEmpty else {
+            return
+        }
+
+        arguments.append(contentsOf: ["--repo", repo])
+    }
+
+    private static func runCommand(_ executable: String, arguments: [String]) throws -> CommandResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [executable] + arguments
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            throw AppError.commandFailed("Could not run `\(executable)`: \(error.localizedDescription)")
+        }
+
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+        return CommandResult(
+            exitCode: process.terminationStatus,
+            stdoutData: stdoutData,
+            stderrData: stderrData
+        )
+    }
+
+    private static func printUsage() {
+        print("""
+        Usage: pr-buddy [options]
+
+        Fetch pull requests with `gh pr list` and open an interactive PR picker when run in a terminal.
+
+        Options:
+          -R, --repo <owner/name>      GitHub repository to query. Defaults to the current repo.
+          -s, --search <query>         Pass a GitHub search query to `gh pr list --search`.
+          -l, --label <label>          Require a label. May be repeated or comma-separated.
+              --status <status>        Match open, closed, merged, draft, ready, approved, changes_requested, or review_required.
+                                     May be repeated or comma-separated.
+              --min-files <count>      Minimum changed files.
+              --max-files <count>      Maximum changed files.
+              --changed-files <range>  Changed files count or range, e.g. 3, 2..8, ..5, or 10..
+              --limit <count>          Maximum PRs to fetch before local filters. Default: 50.
+          -h, --help                   Show this help text.
+
+        Interactive keys:
+          arrows, j/k                  Move selection.
+          enter, v                     View selected PR details.
+          c                            Checkout selected PR.
+          o                            Open selected PR in the browser.
+          r                            Refresh PRs.
+          q                            Quit.
+        """)
+    }
+}
+
+#if !TESTING
+public enum PRBuddyApp {
+    public static func main() {
+        PRBuddy.main()
+    }
+}
+#endif
+
+enum InputKey {
+    case up
+    case down
+    case enter
+    case j
+    case k
+    case v
+    case c
+    case o
+    case r
+    case q
+    case unknown
+}
+
+final class RawTerminalMode {
+    private let original: termios
+
+    init() throws {
+        var settings = termios()
+
+        guard tcgetattr(STDIN_FILENO, &settings) == 0 else {
+            throw AppError.commandFailed("Could not read terminal settings.")
+        }
+
+        original = settings
+        settings.c_lflag &= ~tcflag_t(ECHO | ICANON)
+        settings.c_iflag &= ~tcflag_t(ICRNL | IXON)
+
+        guard tcsetattr(STDIN_FILENO, TCSANOW, &settings) == 0 else {
+            throw AppError.commandFailed("Could not enable interactive terminal mode.")
+        }
+    }
+
+    func restore() {
+        var settings = original
+        tcsetattr(STDIN_FILENO, TCSANOW, &settings)
+    }
+}
+
+func readKey() -> InputKey {
+    var byte: UInt8 = 0
+
+    guard read(STDIN_FILENO, &byte, 1) == 1 else {
+        return .unknown
+    }
+
+    switch byte {
+    case 10, 13:
+        return .enter
+    case 27:
+        var sequence = [UInt8](repeating: 0, count: 2)
+
+        guard read(STDIN_FILENO, &sequence, 2) == 2 else {
+            return .unknown
+        }
+
+        if sequence == [91, 65] {
+            return .up
+        } else if sequence == [91, 66] {
+            return .down
+        } else {
+            return .unknown
+        }
+    case 99, 67:
+        return .c
+    case 106, 74:
+        return .j
+    case 107, 75:
+        return .k
+    case 111, 79:
+        return .o
+    case 113, 81:
+        return .q
+    case 114, 82:
+        return .r
+    case 118, 86:
+        return .v
+    default:
+        return .unknown
+    }
+}
+
+struct CommandResult {
+    let exitCode: Int32
+    let stdoutData: Data
+    let stderrData: Data
+
+    var stdout: String {
+        String(data: stdoutData, encoding: .utf8) ?? ""
+    }
+
+    var stderr: String {
+        String(data: stderrData, encoding: .utf8) ?? ""
+    }
+}
