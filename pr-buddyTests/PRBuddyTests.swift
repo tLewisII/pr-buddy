@@ -37,6 +37,33 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertNil(minOnly.maxChangedFiles)
     }
 
+    func testPullRequestListArgumentsIncludesGhFilters() {
+        var options = Options()
+        options.repo = "owner/project"
+        options.search = "review-requested:@me"
+        options.labels = ["bug", "needs review"]
+        options.limit = 25
+
+        XCTAssertEqual(PRBuddy.pullRequestListArguments(options: options), [
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "25",
+            "--json",
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,labels,updatedAt,url",
+            "--repo",
+            "owner/project",
+            "--search",
+            "review-requested:@me",
+            "--label",
+            "bug",
+            "--label",
+            "needs review"
+        ])
+    }
+
     func testMatchesFiltersRequiresAllLabelsAndAcceptsMatchingStatus() {
         let pullRequest = makePullRequest(
             isDraft: true,

@@ -87,7 +87,8 @@ struct PRBuddy {
                 return
             }
 
-            let pullRequests = try fetchPullRequests(options: options)
+            let arguments = pullRequestListArguments(options: options)
+            let pullRequests = try fetchPullRequests(arguments: arguments)
                 .filter { matchesFilters($0, options: options) }
 
             if pullRequests.isEmpty {
@@ -208,8 +209,8 @@ struct PRBuddy {
         }
     }
 
-    private static func fetchPullRequests(options: Options) throws -> [PullRequest] {
-        var arguments = [
+    static func pullRequestListArguments(options: Options) -> [String] {
+        let baseArguments = [
             "pr",
             "list",
             "--state",
@@ -220,16 +221,14 @@ struct PRBuddy {
             "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,labels,updatedAt,url"
         ]
 
-        appendRepoArgument(options.repo, to: &arguments)
+        let repoArguments = options.repo.flatMap { $0.isEmpty ? nil : ["--repo", $0] } ?? []
+        let searchArguments = options.search.map { $0.isEmpty ? [] : ["--search", $0] } ?? []
+        let labelArguments = options.labels.flatMap { ["--label", $0] }
 
-        if let search = options.search, !search.isEmpty {
-            arguments.append(contentsOf: ["--search", search])
-        }
+        return baseArguments + repoArguments + searchArguments + labelArguments
+    }
 
-        for label in options.labels {
-            arguments.append(contentsOf: ["--label", label])
-        }
-
+    private static func fetchPullRequests(arguments: [String]) throws -> [PullRequest] {
         let result = try runCommand("gh", arguments: arguments)
 
         guard result.exitCode == 0 else {
@@ -435,7 +434,8 @@ struct PRBuddy {
                 let result = try runPRCommand(["view", String(pullRequests[selectedIndex].number), "--web"], repo: options.repo)
                 message = result.exitCode == 0 ? "Opened #\(pullRequests[selectedIndex].number) in browser." : result.stderr
             case .r:
-                pullRequests = try fetchPullRequests(options: options)
+                let arguments = pullRequestListArguments(options: options)
+                pullRequests = try fetchPullRequests(arguments: arguments)
                     .filter { matchesFilters($0, options: options) }
                 selectedIndex = min(selectedIndex, max(0, pullRequests.count - 1))
                 message = "Refreshed \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
@@ -536,17 +536,9 @@ struct PRBuddy {
     }
 
     private static func runPRCommand(_ arguments: [String], repo: String?) throws -> CommandResult {
-        var ghArguments = ["pr"] + arguments
-        appendRepoArgument(repo, to: &ghArguments)
+        let repoArguments = repo.flatMap { $0.isEmpty ? nil : ["--repo", $0] } ?? []
+        let ghArguments = ["pr"] + arguments + repoArguments
         return try runCommand("gh", arguments: ghArguments)
-    }
-
-    private static func appendRepoArgument(_ repo: String?, to arguments: inout [String]) {
-        guard let repo, !repo.isEmpty else {
-            return
-        }
-
-        arguments.append(contentsOf: ["--repo", repo])
     }
 
     private static func runCommand(_ executable: String, arguments: [String]) throws -> CommandResult {
