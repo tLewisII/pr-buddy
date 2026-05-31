@@ -276,6 +276,28 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(PRBuddy.statusTokens(for: pullRequest), ["closed", "ready", "reviewrequired"])
     }
 
+    func testSortedPullRequestsSortsChangedFilesInMemoryAndPreservesTies() {
+        let pullRequests = [
+            makePullRequest(number: 1, changedFiles: 3),
+            makePullRequest(number: 2, changedFiles: nil),
+            makePullRequest(number: 3, changedFiles: 8),
+            makePullRequest(number: 4, changedFiles: 3)
+        ]
+
+        XCTAssertEqual(
+            PRBuddy.sortedPullRequests(pullRequests, fileSortOrder: .none).map(\.number),
+            [1, 2, 3, 4]
+        )
+        XCTAssertEqual(
+            PRBuddy.sortedPullRequests(pullRequests, fileSortOrder: .ascending).map(\.number),
+            [2, 1, 4, 3]
+        )
+        XCTAssertEqual(
+            PRBuddy.sortedPullRequests(pullRequests, fileSortOrder: .descending).map(\.number),
+            [3, 1, 4, 2]
+        )
+    }
+
     func testTableRowsFormatsMissingOptionalValues() {
         let pullRequest = makePullRequest(
             author: nil,
@@ -307,6 +329,27 @@ final class PRBuddyTests: XCTestCase {
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
         XCTAssertEqual(rows[0][1], "3 +120 -45")
+    }
+
+    func testHeadersShowFileSortState() {
+        let renderer = TUIRenderer()
+
+        XCTAssertEqual(renderer.headers(for: .none)[1], "Files")
+        XCTAssertEqual(renderer.headers(for: .ascending)[1], "Files ^")
+        XCTAssertEqual(renderer.headers(for: .descending)[1], "Files v")
+    }
+
+    func testRenderHeaderRowHighlightsFilesHeaderOnly() {
+        let renderer = TUIRenderer()
+        let rendered = renderer.renderHeaderRow(
+            ["PR", "Files", "Status"],
+            widths: [2, 5, 6],
+            isFilesHeaderSelected: true
+        )
+
+        XCTAssertTrue(rendered.contains("PR"))
+        XCTAssertTrue(rendered.contains("\u{001B}[7mFiles\u{001B}[0m"))
+        XCTAssertTrue(rendered.contains("Status"))
     }
 
     func testTruncateUsesAsciiEllipsisAndKeepsRequestedWidth() {

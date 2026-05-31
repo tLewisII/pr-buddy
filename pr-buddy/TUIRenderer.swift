@@ -37,10 +37,13 @@ final class TUIRenderer {
         pullRequests: [PullRequest],
         selectedIndex: Int,
         topIndex: Int,
+        isFilesHeaderSelected: Bool,
+        fileSortOrder: FileSortOrder,
         options: Options,
         message: String
     ) {
         let rows = tableRows(for: pullRequests)
+        let headers = headers(for: fileSortOrder)
         let widths = columnWidths(headers: headers, rows: rows)
         let visibleRows = max(1, terminalHeight() - 8)
         let endIndex = min(rows.count, topIndex + visibleRows)
@@ -49,10 +52,10 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange).  arrows/j/k move  enter/v view  c checkout  o open  r refresh  q quit",
+            "Showing \(shownRange).  arrows/j/k move  enter on Files sort  enter/v view  c checkout  o open  r refresh  q quit",
             message.isEmpty ? " " : message,
             "",
-            "  " + renderRow(headers, widths: widths),
+            "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
             "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  ")
         ]
 
@@ -63,10 +66,11 @@ final class TUIRenderer {
         }
 
         for index in topIndex..<endIndex {
-            let marker = index == selectedIndex ? ">" : " "
+            let isSelectedRow = !isFilesHeaderSelected && index == selectedIndex
+            let marker = isSelectedRow ? ">" : " "
             let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
 
-            if index == selectedIndex {
+            if isSelectedRow {
                 lines.append("\u{001B}[7m\(rendered)\u{001B}[0m")
             } else {
                 lines.append(rendered)
@@ -157,6 +161,36 @@ final class TUIRenderer {
                 default:
                     return paddedText
                 }
+            }
+            .joined(separator: "  ")
+    }
+
+    func headers(for fileSortOrder: FileSortOrder) -> [String] {
+        var headers = self.headers
+
+        switch fileSortOrder {
+        case .none:
+            headers[1] = "Files"
+        case .ascending:
+            headers[1] = "Files ^"
+        case .descending:
+            headers[1] = "Files v"
+        }
+
+        return headers
+    }
+
+    func renderHeaderRow(_ row: [String], widths: [Int], isFilesHeaderSelected: Bool) -> String {
+        row.enumerated()
+            .map { column, value in
+                let text = truncate(value, to: widths[column])
+                let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+
+                guard column == 1, isFilesHeaderSelected else {
+                    return paddedText
+                }
+
+                return "\u{001B}[7m\(paddedText)\u{001B}[0m"
             }
             .joined(separator: "  ")
     }

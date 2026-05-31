@@ -75,6 +75,34 @@ struct PullRequest: Decodable {
     }
 }
 
+enum FileSortOrder: Equatable {
+    case none
+    case ascending
+    case descending
+
+    var next: FileSortOrder {
+        switch self {
+        case .none:
+            return .ascending
+        case .ascending:
+            return .descending
+        case .descending:
+            return .none
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .none:
+            return "original order"
+        case .ascending:
+            return "fewest files first"
+        case .descending:
+            return "most files first"
+        }
+    }
+}
+
 enum AppError: Error, CustomStringConvertible {
     case commandFailed(String)
     case decodingFailed(String)
@@ -360,7 +388,38 @@ extension PRBuddy {
             .filter { $0.isLetter || $0.isNumber }
     }
 
+    static func sortedPullRequests(_ pullRequests: [PullRequest], fileSortOrder: FileSortOrder) -> [PullRequest] {
+        guard fileSortOrder != .none else {
+            return pullRequests
+        }
+
+        return pullRequests.enumerated()
+            .sorted { lhs, rhs in
+                let leftFiles = lhs.element.changedFiles ?? 0
+                let rightFiles = rhs.element.changedFiles ?? 0
+
+                if leftFiles == rightFiles {
+                    return lhs.offset < rhs.offset
+                }
+
+                switch fileSortOrder {
+                case .ascending:
+                    return leftFiles < rightFiles
+                case .descending:
+                    return leftFiles > rightFiles
+                case .none:
+                    return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
+    }
+
     private static func runInteractiveTUI(initialPullRequests: [PullRequest], options: Options) throws {
+        enum Focus {
+            case filesHeader
+            case row
+        }
+
         let terminalMode = try RawTerminalMode()
         let renderer = TUIRenderer()
         defer {
@@ -369,7 +428,10 @@ extension PRBuddy {
             renderer.clearScreen()
         }
 
-        var pullRequests = initialPullRequests
+        var basePullRequests = initialPullRequests
+        var fileSortOrder = FileSortOrder.none
+        var pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
+        var focus = Focus.row
         var selectedIndex = 0
         var topIndex = 0
         var message = "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
@@ -395,18 +457,61 @@ extension PRBuddy {
                 pullRequests: pullRequests,
                 selectedIndex: selectedIndex,
                 topIndex: topIndex,
+                isFilesHeaderSelected: focus == .filesHeader,
+                fileSortOrder: fileSortOrder,
                 options: options,
                 message: message
             )
 
-            switch readKey() {
+            let key = readKey()
+
+            switch key {
             case .up, .k:
-                selectedIndex = max(0, selectedIndex - 1)
+                if focus == .filesHeader {
+                    message = ""
+                    continue
+                } else if selectedIndex == 0 {
+                    focus = .filesHeader
+                } else {
+                    selectedIndex -= 1
+                }
                 message = ""
             case .down, .j:
-                selectedIndex = min(max(0, pullRequests.count - 1), selectedIndex + 1)
+                if focus == .filesHeader {
+                    if !pullRequests.isEmpty {
+                        focus = .row
+                    }
+                } else {
+                    selectedIndex = min(max(0, pullRequests.count - 1), selectedIndex + 1)
+                }
                 message = ""
-            case .enter, .v:
+            case .enter:
+                if focus == .filesHeader {
+                    fileSortOrder = fileSortOrder.next
+                    pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
+                    selectedIndex = 0
+                    topIndex = 0
+                    message = "Sorted by files: \(fileSortOrder.description)."
+                    continue
+                }
+
+                guard !pullRequests.isEmpty else {
+                    message = "No pull requests to view."
+                    continue
+                }
+
+                renderer.drawCommandResult(
+                    title: "PR #\(pullRequests[selectedIndex].number)",
+                    result: try runPRCommand(["view", String(pullRequests[selectedIndex].number)], repo: options.repo)
+                )
+                _ = readKey()
+                message = "Returned from details."
+            case .v:
+                guard focus == .row else {
+                    message = "Press enter on the Files header to change file-count sorting."
+                    continue
+                }
+
                 guard !pullRequests.isEmpty else {
                     message = "No pull requests to view."
                     continue
@@ -419,6 +524,11 @@ extension PRBuddy {
                 _ = readKey()
                 message = "Returned from details."
             case .c:
+                guard focus == .row else {
+                    message = "Move to a pull request before checking out."
+                    continue
+                }
+
                 guard !pullRequests.isEmpty else {
                     message = "No pull requests to checkout."
                     continue
@@ -431,6 +541,11 @@ extension PRBuddy {
                 _ = readKey()
                 message = "Checkout command finished."
             case .o:
+                guard focus == .row else {
+                    message = "Move to a pull request before opening it."
+                    continue
+                }
+
                 guard !pullRequests.isEmpty else {
                     message = "No pull requests to open."
                     continue
@@ -440,14 +555,27 @@ extension PRBuddy {
                 message = result.exitCode == 0 ? "Opened #\(pullRequests[selectedIndex].number) in browser." : result.stderr
             case .r:
                 let arguments = pullRequestListArguments(options: options)
-                pullRequests = try fetchPullRequests(arguments: arguments)
+                let selectedPRNumber = pullRequests.indices.contains(selectedIndex) ? pullRequests[selectedIndex].number : nil
+                basePullRequests = try fetchPullRequests(arguments: arguments)
                     .filter { matchesFilters($0, options: options) }
-                selectedIndex = min(selectedIndex, max(0, pullRequests.count - 1))
+                pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
+
+                if let selectedPRNumber,
+                   let updatedIndex = pullRequests.firstIndex(where: { $0.number == selectedPRNumber }) {
+                    selectedIndex = updatedIndex
+                } else {
+                    selectedIndex = min(selectedIndex, max(0, pullRequests.count - 1))
+                }
+
+                if pullRequests.isEmpty {
+                    focus = .filesHeader
+                }
+
                 message = "Refreshed \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
             case .q:
                 return
             case .unknown:
-                message = "Use arrows/j/k to move, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+                message = "Use arrows/j/k to move, enter on Files to sort, enter/v to view, c checkout, o open, r refresh, q quit."
             }
         }
     }
