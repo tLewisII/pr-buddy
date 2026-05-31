@@ -16,6 +16,8 @@ struct Options {
     var statuses: [String] = []
     var minChangedFiles: Int?
     var maxChangedFiles: Int?
+    var minReviews: Int?
+    var maxReviews: Int?
     var limit = 50
 }
 
@@ -27,6 +29,8 @@ struct PullRequest: Decodable {
     struct Label: Decodable {
         let name: String
     }
+
+    struct Review: Decodable {}
 
     let number: Int
     let title: String
@@ -40,6 +44,7 @@ struct PullRequest: Decodable {
     let additions: Int?
     let deletions: Int?
     let labels: [Label]
+    let reviews: [Review]?
     let updatedAt: String?
     let url: String
 
@@ -63,6 +68,10 @@ struct PullRequest: Decodable {
 
     var labelSummary: String {
         labels.map(\.name).joined(separator: ", ")
+    }
+
+    var reviewCount: Int {
+        reviews?.count ?? 0
     }
 }
 
@@ -141,6 +150,9 @@ private struct PRBuddyCommand: ParsableCommand {
     @Option(name: .customLong("changed-files"), help: "Changed files count or range, e.g. 3, 2..8, ..5, or 10..")
     var changedFiles: String?
 
+    @Option(name: .customLong("reviews"), help: "Review count or range, e.g. 3, 2..8, ..5, or 10..")
+    var reviews: String?
+
     @Option(name: .customLong("limit"), help: "Maximum PRs to fetch before local filters.")
     var limit = 50
 
@@ -166,6 +178,10 @@ private struct PRBuddyCommand: ParsableCommand {
             try PRBuddy.parseChangedFilesRange(changedFiles, into: &options)
         }
 
+        if let reviews {
+            try PRBuddy.parseReviewsRange(reviews, into: &options)
+        }
+
         try PRBuddy.validateOptions(options)
         return options
     }
@@ -177,6 +193,12 @@ extension PRBuddy {
            let maxChangedFiles = options.maxChangedFiles,
            minChangedFiles > maxChangedFiles {
             throw ValidationError("--min-files cannot be greater than --max-files.")
+        }
+
+        if let minReviews = options.minReviews,
+           let maxReviews = options.maxReviews,
+           minReviews > maxReviews {
+            throw ValidationError("--reviews minimum cannot be greater than maximum.")
         }
 
         if options.limit < 1 {
@@ -204,27 +226,43 @@ extension PRBuddy {
     }
 
     fileprivate static func parseChangedFilesRange(_ value: String, into options: inout Options) throws {
+        let range = try parseIntRange(value, option: "--changed-files")
+        options.minChangedFiles = range.min
+        options.maxChangedFiles = range.max
+    }
+
+    fileprivate static func parseReviewsRange(_ value: String, into options: inout Options) throws {
+        let range = try parseIntRange(value, option: "--reviews")
+        options.minReviews = range.min
+        options.maxReviews = range.max
+    }
+
+    private static func parseIntRange(_ value: String, option: String) throws -> (min: Int?, max: Int?) {
         if value.contains("...") {
-            throw ValidationError("--changed-files uses two dots, for example 2..8.")
+            throw ValidationError("\(option) uses two dots, for example 2..8.")
         }
 
         let parts = value.components(separatedBy: "..")
 
         switch parts.count {
         case 1:
-            let count = try parseInt(parts[0], option: "--changed-files")
-            options.minChangedFiles = count
-            options.maxChangedFiles = count
+            let count = try parseInt(parts[0], option: option)
+            return (count, count)
         case 2:
+            var min: Int?
+            var max: Int?
+
             if !parts[0].isEmpty {
-                options.minChangedFiles = try parseInt(parts[0], option: "--changed-files")
+                min = try parseInt(parts[0], option: option)
             }
 
             if !parts[1].isEmpty {
-                options.maxChangedFiles = try parseInt(parts[1], option: "--changed-files")
+                max = try parseInt(parts[1], option: option)
             }
+
+            return (min, max)
         default:
-            throw ValidationError("--changed-files expects a number or range, for example 3, 2..8, ..5, or 10..")
+            throw ValidationError("\(option) expects a number or range, for example 3, 2..8, ..5, or 10..")
         }
     }
 
@@ -237,7 +275,7 @@ extension PRBuddy {
             "--limit",
             String(options.limit),
             "--json",
-            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,updatedAt,url"
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,reviews,updatedAt,url"
         ]
 
         let repoArguments = options.repo.flatMap { $0.isEmpty ? nil : ["--repo", $0] } ?? []
@@ -269,6 +307,16 @@ extension PRBuddy {
 
         if let maxChangedFiles = options.maxChangedFiles,
            (pullRequest.changedFiles ?? 0) > maxChangedFiles {
+            return false
+        }
+
+        if let minReviews = options.minReviews,
+           pullRequest.reviewCount < minReviews {
+            return false
+        }
+
+        if let maxReviews = options.maxReviews,
+           pullRequest.reviewCount > maxReviews {
             return false
         }
 

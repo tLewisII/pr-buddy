@@ -9,6 +9,7 @@ final class PRBuddyTests: XCTestCase {
             "--label", "bug,needs review",
             "--status", "draft,approved",
             "--changed-files", "2..8",
+            "--reviews", "1..3",
             "--limit", "25"
         ])
 
@@ -18,6 +19,8 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(options.statuses, ["draft", "approved"])
         XCTAssertEqual(options.minChangedFiles, 2)
         XCTAssertEqual(options.maxChangedFiles, 8)
+        XCTAssertEqual(options.minReviews, 1)
+        XCTAssertEqual(options.maxReviews, 3)
         XCTAssertEqual(options.limit, 25)
     }
 
@@ -44,11 +47,35 @@ final class PRBuddyTests: XCTestCase {
         }
     }
 
+    func testParseOptionsRejectsInvalidReviewRanges() {
+        let invalidRanges = [
+            ("2...8", "uses two dots"),
+            ("2..x", "expects a number"),
+            ("1..2..3", "expects a number or range")
+        ]
+
+        for (range, expectedMessage) in invalidRanges {
+            XCTAssertThrowsError(try PRBuddy.parseOptions(["--reviews", range])) { error in
+                XCTAssertTrue(
+                    String(describing: error).contains(expectedMessage),
+                    "Expected \(range) to fail with \(expectedMessage), got \(error)"
+                )
+            }
+        }
+    }
+
     func testParseOptionsSupportsExactChangedFileCount() throws {
         let options = try PRBuddy.parseOptions(["--changed-files", "3"])
 
         XCTAssertEqual(options.minChangedFiles, 3)
         XCTAssertEqual(options.maxChangedFiles, 3)
+    }
+
+    func testParseOptionsSupportsExactReviewCount() throws {
+        let options = try PRBuddy.parseOptions(["--reviews", "3"])
+
+        XCTAssertEqual(options.minReviews, 3)
+        XCTAssertEqual(options.maxReviews, 3)
     }
 
     func testParseOptionsSupportsOpenEndedChangedFileRanges() throws {
@@ -59,6 +86,16 @@ final class PRBuddyTests: XCTestCase {
         let minOnly = try PRBuddy.parseOptions(["--changed-files", "10.."])
         XCTAssertEqual(minOnly.minChangedFiles, 10)
         XCTAssertNil(minOnly.maxChangedFiles)
+    }
+
+    func testParseOptionsSupportsOpenEndedReviewRanges() throws {
+        let maxOnly = try PRBuddy.parseOptions(["--reviews", "..5"])
+        XCTAssertNil(maxOnly.minReviews)
+        XCTAssertEqual(maxOnly.maxReviews, 5)
+
+        let minOnly = try PRBuddy.parseOptions(["--reviews", "10.."])
+        XCTAssertEqual(minOnly.minReviews, 10)
+        XCTAssertNil(minOnly.maxReviews)
     }
 
     func testParseOptionsRejectsInvalidLimitAndEmptyRepo() {
@@ -86,7 +123,7 @@ final class PRBuddyTests: XCTestCase {
             "--limit",
             "25",
             "--json",
-            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,updatedAt,url",
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,reviews,updatedAt,url",
             "--repo",
             "owner/project",
             "--search",
@@ -103,7 +140,8 @@ final class PRBuddyTests: XCTestCase {
             isDraft: true,
             reviewDecision: "APPROVED",
             changedFiles: 4,
-            labels: ["bug", "needs review"]
+            labels: ["bug", "needs review"],
+            reviews: 2
         )
 
         var options = Options()
@@ -111,6 +149,8 @@ final class PRBuddyTests: XCTestCase {
         options.statuses = ["approved"]
         options.minChangedFiles = 2
         options.maxChangedFiles = 5
+        options.minReviews = 1
+        options.maxReviews = 3
 
         XCTAssertTrue(PRBuddy.matchesFilters(pullRequest, options: options))
     }
@@ -140,6 +180,34 @@ final class PRBuddyTests: XCTestCase {
 
         var maxOptions = Options()
         maxOptions.maxChangedFiles = 5
+        XCTAssertTrue(PRBuddy.matchesFilters(pullRequest, options: maxOptions))
+    }
+
+    func testMatchesFiltersRejectsPullRequestOutsideReviewRange() {
+        let pullRequest = makePullRequest(reviews: 4)
+        var options = Options()
+        options.maxReviews = 3
+
+        XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: options))
+    }
+
+    func testMatchesFiltersRejectsPullRequestBelowReviewRange() {
+        let pullRequest = makePullRequest(reviews: 1)
+        var options = Options()
+        options.minReviews = 2
+
+        XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: options))
+    }
+
+    func testMatchesFiltersTreatsMissingReviewsAsZero() {
+        let pullRequest = makePullRequest(reviews: nil)
+
+        var minOptions = Options()
+        minOptions.minReviews = 1
+        XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: minOptions))
+
+        var maxOptions = Options()
+        maxOptions.maxReviews = 0
         XCTAssertTrue(PRBuddy.matchesFilters(pullRequest, options: maxOptions))
     }
 
@@ -286,6 +354,7 @@ final class PRBuddyTests: XCTestCase {
         additions: Int? = 12,
         deletions: Int? = 4,
         labels: [String] = ["enhancement"],
+        reviews: Int? = 1,
         updatedAt: String? = "2026-05-25T00:00:00Z",
         url: String = "https://github.com/owner/project/pull/42"
     ) -> PullRequest {
@@ -302,6 +371,7 @@ final class PRBuddyTests: XCTestCase {
             additions: additions,
             deletions: deletions,
             labels: labels.map { PullRequest.Label(name: $0) },
+            reviews: reviews.map { Array(repeating: PullRequest.Review(), count: $0) },
             updatedAt: updatedAt,
             url: url
         )
