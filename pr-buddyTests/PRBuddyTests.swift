@@ -27,6 +27,30 @@ final class PRBuddyTests: XCTestCase {
         }
     }
 
+    func testParseOptionsRejectsInvalidChangedFilesRanges() {
+        let invalidRanges = [
+            ("2...8", "uses two dots"),
+            ("2..x", "expects a number"),
+            ("1..2..3", "expects a number or range")
+        ]
+
+        for (range, expectedMessage) in invalidRanges {
+            XCTAssertThrowsError(try PRBuddy.parseOptions(["--changed-files", range])) { error in
+                XCTAssertTrue(
+                    String(describing: error).contains(expectedMessage),
+                    "Expected \(range) to fail with \(expectedMessage), got \(error)"
+                )
+            }
+        }
+    }
+
+    func testParseOptionsSupportsExactChangedFileCount() throws {
+        let options = try PRBuddy.parseOptions(["--changed-files", "3"])
+
+        XCTAssertEqual(options.minChangedFiles, 3)
+        XCTAssertEqual(options.maxChangedFiles, 3)
+    }
+
     func testParseOptionsSupportsOpenEndedChangedFileRanges() throws {
         let maxOnly = try PRBuddy.parseOptions(["--changed-files", "..5"])
         XCTAssertNil(maxOnly.minChangedFiles)
@@ -35,6 +59,16 @@ final class PRBuddyTests: XCTestCase {
         let minOnly = try PRBuddy.parseOptions(["--changed-files", "10.."])
         XCTAssertEqual(minOnly.minChangedFiles, 10)
         XCTAssertNil(minOnly.maxChangedFiles)
+    }
+
+    func testParseOptionsRejectsInvalidLimitAndEmptyRepo() {
+        XCTAssertThrowsError(try PRBuddy.parseOptions(["--limit", "0"])) { error in
+            XCTAssertTrue(String(describing: error).contains("--limit must be greater than zero"))
+        }
+
+        XCTAssertThrowsError(try PRBuddy.parseOptions(["--repo", "   "])) { error in
+            XCTAssertTrue(String(describing: error).contains("--repo cannot be empty"))
+        }
     }
 
     func testPullRequestListArgumentsIncludesGhFilters() {
@@ -89,12 +123,89 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: options))
     }
 
+    func testMatchesFiltersRejectsPullRequestBelowChangedFileRange() {
+        let pullRequest = makePullRequest(changedFiles: 1)
+        var options = Options()
+        options.minChangedFiles = 2
+
+        XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: options))
+    }
+
+    func testMatchesFiltersTreatsMissingChangedFilesAsZero() {
+        let pullRequest = makePullRequest(changedFiles: nil)
+
+        var minOptions = Options()
+        minOptions.minChangedFiles = 1
+        XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: minOptions))
+
+        var maxOptions = Options()
+        maxOptions.maxChangedFiles = 5
+        XCTAssertTrue(PRBuddy.matchesFilters(pullRequest, options: maxOptions))
+    }
+
     func testMatchesFiltersRejectsMissingLabel() {
         let pullRequest = makePullRequest(labels: ["bug"])
         var options = Options()
         options.labels = ["bug", "frontend"]
 
         XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: options))
+    }
+
+    func testMatchesFiltersAcceptsStateDraftReadyAndReviewStatuses() {
+        let draftApproved = makePullRequest(
+            state: "OPEN",
+            isDraft: true,
+            reviewDecision: "APPROVED"
+        )
+
+        var draftOptions = Options()
+        draftOptions.statuses = ["draft"]
+        XCTAssertTrue(PRBuddy.matchesFilters(draftApproved, options: draftOptions))
+
+        var approvedOptions = Options()
+        approvedOptions.statuses = ["approved"]
+        XCTAssertTrue(PRBuddy.matchesFilters(draftApproved, options: approvedOptions))
+
+        let readyMergedChangesRequested = makePullRequest(
+            state: "MERGED",
+            isDraft: false,
+            reviewDecision: "CHANGES_REQUESTED"
+        )
+
+        var readyOptions = Options()
+        readyOptions.statuses = ["ready"]
+        XCTAssertTrue(PRBuddy.matchesFilters(readyMergedChangesRequested, options: readyOptions))
+
+        var mergedOptions = Options()
+        mergedOptions.statuses = ["merged"]
+        XCTAssertTrue(PRBuddy.matchesFilters(readyMergedChangesRequested, options: mergedOptions))
+
+        var changesRequestedOptions = Options()
+        changesRequestedOptions.statuses = ["changes-requested"]
+        XCTAssertTrue(PRBuddy.matchesFilters(readyMergedChangesRequested, options: changesRequestedOptions))
+    }
+
+    func testMatchesFiltersRejectsUnmatchedStatus() {
+        let pullRequest = makePullRequest(
+            state: "OPEN",
+            isDraft: false,
+            reviewDecision: "REVIEW_REQUIRED"
+        )
+
+        var options = Options()
+        options.statuses = ["approved"]
+
+        XCTAssertFalse(PRBuddy.matchesFilters(pullRequest, options: options))
+    }
+
+    func testStatusTokensNormalizeStateAndReviewDecision() {
+        let pullRequest = makePullRequest(
+            state: "CLOSED",
+            isDraft: false,
+            reviewDecision: "REVIEW_REQUIRED"
+        )
+
+        XCTAssertEqual(PRBuddy.statusTokens(for: pullRequest), ["closed", "ready", "reviewrequired"])
     }
 
     func testTableRowsFormatsMissingOptionalValues() {
