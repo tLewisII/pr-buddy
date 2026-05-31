@@ -11,6 +11,9 @@ import Foundation
 final class TUIRenderer {
     private let headers = ["PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
     private let maximumWidths = [6, 18, 8, 18, 24, 72, 24]
+    private let additionsColor = "\u{001B}[38;2;26;127;55m"
+    private let deletionsColor = "\u{001B}[38;2;209;36;47m"
+    private let defaultForegroundColor = "\u{001B}[39m"
     private var previousListLineCount = 0
 
     func printTable(_ pullRequests: [PullRequest]) {
@@ -137,9 +140,37 @@ final class TUIRenderer {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
-                return text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+                let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+                return column == 1 ? colorizedFileSummary(paddedText) : paddedText
             }
             .joined(separator: "  ")
+    }
+
+    func colorizedFileSummary(_ value: String) -> String {
+        value
+            .split(separator: " ", omittingEmptySubsequences: false)
+            .map { token -> String in
+                let text = String(token)
+
+                if isSignedNumber(text, prefix: "+") {
+                    return additionsColor + text + defaultForegroundColor
+                }
+
+                if isSignedNumber(text, prefix: "-") {
+                    return deletionsColor + text + defaultForegroundColor
+                }
+
+                return text
+            }
+            .joined(separator: " ")
+    }
+
+    private func isSignedNumber(_ value: String, prefix: Character) -> Bool {
+        guard value.first == prefix else {
+            return false
+        }
+
+        return !value.dropFirst().isEmpty && value.dropFirst().allSatisfy(\.isNumber)
     }
 
     func truncate(_ value: String, to width: Int) -> String {

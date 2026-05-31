@@ -249,6 +249,17 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(renderer.truncate("abc", to: 5), "abc")
     }
 
+    func testRenderRowColorsChangedFileStats() {
+        let renderer = TUIRenderer()
+        let rendered = renderer.renderRow(
+            ["#42", "3 +120 -45", "open", "-", "-", "Title", "terry"],
+            widths: [3, 10, 4, 1, 1, 5, 5]
+        )
+
+        XCTAssertTrue(rendered.contains("\u{001B}[38;2;26;127;55m+120\u{001B}[39m"))
+        XCTAssertTrue(rendered.contains("\u{001B}[38;2;209;36;47m-45\u{001B}[39m"))
+    }
+
     private func makePullRequest(
         number: Int = 42,
         title: String = "Fix checkout flow",
