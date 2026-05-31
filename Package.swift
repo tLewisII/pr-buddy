@@ -12,9 +12,15 @@ let package = Package(
     products: [
         .executable(name: "pr-buddy", targets: ["pr-buddyCLI"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0")
+    ],
     targets: [
         .target(
             name: "pr-buddy",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
             path: "pr-buddy"
         ),
         .executableTarget(

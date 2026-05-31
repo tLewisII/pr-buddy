@@ -7,6 +7,7 @@
 
 import Darwin
 import Foundation
+import ArgumentParser
 
 struct Options {
     var repo: String?
@@ -16,7 +17,6 @@ struct Options {
     var minChangedFiles: Int?
     var maxChangedFiles: Int?
     var limit = 50
-    var showHelp = false
 }
 
 struct PullRequest: Decodable {
@@ -65,13 +65,12 @@ struct PullRequest: Decodable {
 }
 
 enum AppError: Error, CustomStringConvertible {
-    case invalidArguments(String)
     case commandFailed(String)
     case decodingFailed(String)
 
     var description: String {
         switch self {
-        case .invalidArguments(let message), .commandFailed(let message), .decodingFailed(let message):
+        case .commandFailed(let message), .decodingFailed(let message):
             return message
         }
     }
@@ -79,97 +78,115 @@ enum AppError: Error, CustomStringConvertible {
 
 struct PRBuddy {
     static func main() {
-        do {
-            let options = try parseOptions(Array(CommandLine.arguments.dropFirst()))
+        PRBuddyCommand.main()
+    }
 
-            if options.showHelp {
-                printUsage()
-                return
-            }
+    static func run(options: Options) throws {
+        let arguments = pullRequestListArguments(options: options)
+        let pullRequests = try fetchPullRequests(arguments: arguments)
+            .filter { matchesFilters($0, options: options) }
 
-            let arguments = pullRequestListArguments(options: options)
-            let pullRequests = try fetchPullRequests(arguments: arguments)
-                .filter { matchesFilters($0, options: options) }
+        if pullRequests.isEmpty {
+            print("No pull requests matched the current filters.")
+            return
+        }
 
-            if pullRequests.isEmpty {
-                print("No pull requests matched the current filters.")
-                return
-            }
-
-            if isatty(STDIN_FILENO) != 0 {
-                try runInteractiveTUI(initialPullRequests: pullRequests, options: options)
-            } else {
-                printTable(pullRequests)
-            }
-        } catch {
-            fputs("pr-buddy: \(error)\n", stderr)
-            fputs("Run `pr-buddy --help` for usage.\n", stderr)
-            exit(1)
+        if isatty(STDIN_FILENO) != 0 {
+            try runInteractiveTUI(initialPullRequests: pullRequests, options: options)
+        } else {
+            printTable(pullRequests)
         }
     }
 
     static func parseOptions(_ arguments: [String]) throws -> Options {
+        try PRBuddyCommand.parse(arguments).parsedOptions()
+    }
+}
+
+private struct PRBuddyCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "pr-buddy",
+        abstract: "Fetch pull requests with `gh pr list` and open an interactive PR picker when run in a terminal.",
+        discussion: """
+        Interactive keys:
+          arrows, j/k    Move selection.
+          enter, v       View selected PR details.
+          c              Checkout selected PR.
+          o              Open selected PR in the browser.
+          r              Refresh PRs.
+          q              Quit.
+        """
+    )
+
+    @Option(name: [.customLong("repo"), .customShort("R")], help: "GitHub repository to query. Defaults to the current repo.")
+    var repo: String?
+
+    @Option(name: [.customLong("search"), .customShort("s")], help: "Pass a GitHub search query to `gh pr list --search`.")
+    var search: String?
+
+    @Option(name: [.customLong("label"), .customShort("l")], help: "Require a label. May be repeated or comma-separated.")
+    var labels: [String] = []
+
+    @Option(name: .customLong("status"), help: "Match open, closed, merged, draft, ready, approved, changes_requested, or review_required. May be repeated or comma-separated.")
+    var statuses: [String] = []
+
+    @Option(name: .customLong("min-files"), help: "Minimum changed files.")
+    var minChangedFiles: Int?
+
+    @Option(name: .customLong("max-files"), help: "Maximum changed files.")
+    var maxChangedFiles: Int?
+
+    @Option(name: .customLong("changed-files"), help: "Changed files count or range, e.g. 3, 2..8, ..5, or 10..")
+    var changedFiles: String?
+
+    @Option(name: .customLong("limit"), help: "Maximum PRs to fetch before local filters.")
+    var limit = 50
+
+    mutating func validate() throws {
+        _ = try parsedOptions()
+    }
+
+    func run() throws {
+        try PRBuddy.run(options: parsedOptions())
+    }
+
+    func parsedOptions() throws -> Options {
         var options = Options()
-        var index = 0
+        options.repo = repo
+        options.search = search
+        options.labels = labels.flatMap(PRBuddy.splitCSV)
+        options.statuses = statuses.flatMap(PRBuddy.splitCSV)
+        options.minChangedFiles = minChangedFiles
+        options.maxChangedFiles = maxChangedFiles
+        options.limit = limit
 
-        while index < arguments.count {
-            let argument = arguments[index]
-
-            switch argument {
-            case "--help", "-h":
-                options.showHelp = true
-            case "--repo", "-R":
-                options.repo = try value(after: argument, in: arguments, index: &index)
-            case "--search", "-s":
-                options.search = try value(after: argument, in: arguments, index: &index)
-            case "--label", "-l":
-                options.labels.append(contentsOf: splitCSV(try value(after: argument, in: arguments, index: &index)))
-            case "--status":
-                options.statuses.append(contentsOf: splitCSV(try value(after: argument, in: arguments, index: &index)))
-            case "--min-files":
-                options.minChangedFiles = try parseInt(try value(after: argument, in: arguments, index: &index), option: argument)
-            case "--max-files":
-                options.maxChangedFiles = try parseInt(try value(after: argument, in: arguments, index: &index), option: argument)
-            case "--changed-files":
-                try parseChangedFilesRange(try value(after: argument, in: arguments, index: &index), into: &options)
-            case "--limit":
-                options.limit = try parseInt(try value(after: argument, in: arguments, index: &index), option: argument)
-            default:
-                throw AppError.invalidArguments("Unknown option: \(argument)")
-            }
-
-            index += 1
+        if let changedFiles {
+            try PRBuddy.parseChangedFilesRange(changedFiles, into: &options)
         }
 
+        try PRBuddy.validateOptions(options)
+        return options
+    }
+}
+
+extension PRBuddy {
+    static func validateOptions(_ options: Options) throws {
         if let minChangedFiles = options.minChangedFiles,
            let maxChangedFiles = options.maxChangedFiles,
            minChangedFiles > maxChangedFiles {
-            throw AppError.invalidArguments("--min-files cannot be greater than --max-files.")
+            throw ValidationError("--min-files cannot be greater than --max-files.")
         }
 
         if options.limit < 1 {
-            throw AppError.invalidArguments("--limit must be greater than zero.")
+            throw ValidationError("--limit must be greater than zero.")
         }
 
         if let repo = options.repo, repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw AppError.invalidArguments("--repo cannot be empty.")
+            throw ValidationError("--repo cannot be empty.")
         }
-
-        return options
     }
 
-    private static func value(after option: String, in arguments: [String], index: inout Int) throws -> String {
-        let valueIndex = index + 1
-
-        guard valueIndex < arguments.count else {
-            throw AppError.invalidArguments("Missing value for \(option).")
-        }
-
-        index = valueIndex
-        return arguments[valueIndex]
-    }
-
-    private static func splitCSV(_ value: String) -> [String] {
+    fileprivate static func splitCSV(_ value: String) -> [String] {
         value
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -178,15 +195,15 @@ struct PRBuddy {
 
     private static func parseInt(_ value: String, option: String) throws -> Int {
         guard let integer = Int(value) else {
-            throw AppError.invalidArguments("\(option) expects a number.")
+            throw ValidationError("\(option) expects a number.")
         }
 
         return integer
     }
 
-    private static func parseChangedFilesRange(_ value: String, into options: inout Options) throws {
+    fileprivate static func parseChangedFilesRange(_ value: String, into options: inout Options) throws {
         if value.contains("...") {
-            throw AppError.invalidArguments("--changed-files uses two dots, for example 2..8.")
+            throw ValidationError("--changed-files uses two dots, for example 2..8.")
         }
 
         let parts = value.components(separatedBy: "..")
@@ -205,7 +222,7 @@ struct PRBuddy {
                 options.maxChangedFiles = try parseInt(parts[1], option: "--changed-files")
             }
         default:
-            throw AppError.invalidArguments("--changed-files expects a number or range, for example 3, 2..8, ..5, or 10..")
+            throw ValidationError("--changed-files expects a number or range, for example 3, 2..8, ..5, or 10..")
         }
     }
 
@@ -568,33 +585,6 @@ struct PRBuddy {
         )
     }
 
-    private static func printUsage() {
-        print("""
-        Usage: pr-buddy [options]
-
-        Fetch pull requests with `gh pr list` and open an interactive PR picker when run in a terminal.
-
-        Options:
-          -R, --repo <owner/name>      GitHub repository to query. Defaults to the current repo.
-          -s, --search <query>         Pass a GitHub search query to `gh pr list --search`.
-          -l, --label <label>          Require a label. May be repeated or comma-separated.
-              --status <status>        Match open, closed, merged, draft, ready, approved, changes_requested, or review_required.
-                                     May be repeated or comma-separated.
-              --min-files <count>      Minimum changed files.
-              --max-files <count>      Maximum changed files.
-              --changed-files <range>  Changed files count or range, e.g. 3, 2..8, ..5, or 10..
-              --limit <count>          Maximum PRs to fetch before local filters. Default: 50.
-          -h, --help                   Show this help text.
-
-        Interactive keys:
-          arrows, j/k                  Move selection.
-          enter, v                     View selected PR details.
-          c                            Checkout selected PR.
-          o                            Open selected PR in the browser.
-          r                            Refresh PRs.
-          q                            Quit.
-        """)
-    }
 }
 
 #if !TESTING

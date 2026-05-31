@@ -8,6 +8,12 @@ let project = Project(
         defaultKnownRegions: ["en", "Base"],
         developmentRegion: "en"
     ),
+    packages: [
+        .remote(
+            url: "https://github.com/apple/swift-argument-parser",
+            requirement: .upToNextMajor(from: "1.5.0")
+        ),
+    ],
     settings: .settings(
         base: [
             "CLANG_CXX_LANGUAGE_STANDARD": "gnu++20",
@@ -45,6 +51,9 @@ let project = Project(
             deploymentTargets: .macOS(macOSDeploymentTarget),
             infoPlist: .default,
             sources: ["pr-buddy/**"],
+            dependencies: [
+                .package(product: "ArgumentParser"),
+            ],
             settings: .settings(base: [
                 "PRODUCT_MODULE_NAME": "pr_buddy",
                 "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
