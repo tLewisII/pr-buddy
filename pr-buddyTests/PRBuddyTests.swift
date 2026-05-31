@@ -109,12 +109,11 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][0], "1")
-        XCTAssertEqual(rows[0][1], "#42")
-        XCTAssertEqual(rows[0][2], "-")
+        XCTAssertEqual(rows[0][0], "#42")
+        XCTAssertEqual(rows[0][1], "-")
+        XCTAssertEqual(rows[0][3], "-")
         XCTAssertEqual(rows[0][4], "-")
-        XCTAssertEqual(rows[0][5], "-")
-        XCTAssertEqual(rows[0][7], "-")
+        XCTAssertEqual(rows[0][6], "-")
     }
 
     func testTruncateUsesAsciiEllipsisAndKeepsRequestedWidth() {

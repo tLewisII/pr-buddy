@@ -9,8 +9,8 @@ import Darwin
 import Foundation
 
 final class TUIRenderer {
-    private let headers = ["Idx", "PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
-    private let maximumWidths = [3, 6, 5, 8, 18, 24, 72, 24]
+    private let headers = ["PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
+    private let maximumWidths = [6, 5, 8, 18, 24, 72, 24]
     private var previousListLineCount = 0
 
     func printTable(_ pullRequests: [PullRequest]) {
@@ -92,9 +92,8 @@ final class TUIRenderer {
     }
 
     func tableRows(for pullRequests: [PullRequest]) -> [[String]] {
-        pullRequests.enumerated().map { index, pullRequest in
+        pullRequests.map { pullRequest in
             [
-                String(index + 1),
                 "#\(pullRequest.number)",
                 pullRequest.changedFiles.map(String.init) ?? "-",
                 pullRequest.statusSummary,
