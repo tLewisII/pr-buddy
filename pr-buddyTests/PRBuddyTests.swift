@@ -107,7 +107,7 @@ final class PRBuddyTests: XCTestCase {
             labels: []
         )
 
-        let rows = PRBuddy.tableRows(for: [pullRequest])
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
 
         XCTAssertEqual(rows[0][0], "1")
         XCTAssertEqual(rows[0][1], "#42")
@@ -118,9 +118,11 @@ final class PRBuddyTests: XCTestCase {
     }
 
     func testTruncateUsesAsciiEllipsisAndKeepsRequestedWidth() {
-        XCTAssertEqual(PRBuddy.truncate("abcdef", to: 5), "ab...")
-        XCTAssertEqual(PRBuddy.truncate("abcdef", to: 3), "abc")
-        XCTAssertEqual(PRBuddy.truncate("abc", to: 5), "abc")
+        let renderer = TUIRenderer()
+
+        XCTAssertEqual(renderer.truncate("abcdef", to: 5), "ab...")
+        XCTAssertEqual(renderer.truncate("abcdef", to: 3), "abc")
+        XCTAssertEqual(renderer.truncate("abc", to: 5), "abc")
     }
 
     private func makePullRequest(
