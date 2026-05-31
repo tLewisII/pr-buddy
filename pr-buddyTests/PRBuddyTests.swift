@@ -86,7 +86,7 @@ final class PRBuddyTests: XCTestCase {
             "--limit",
             "25",
             "--json",
-            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,labels,updatedAt,url",
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,updatedAt,url",
             "--repo",
             "owner/project",
             "--search",
@@ -215,6 +215,8 @@ final class PRBuddyTests: XCTestCase {
             baseRefName: nil,
             reviewDecision: nil,
             changedFiles: nil,
+            additions: nil,
+            deletions: nil,
             labels: []
         )
 
@@ -225,6 +227,18 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(rows[0][3], "-")
         XCTAssertEqual(rows[0][4], "-")
         XCTAssertEqual(rows[0][6], "-")
+    }
+
+    func testTableRowsFormatsChangedFileStats() {
+        let pullRequest = makePullRequest(
+            changedFiles: 3,
+            additions: 120,
+            deletions: 45
+        )
+
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][1], "3 +120 -45")
     }
 
     func testTruncateUsesAsciiEllipsisAndKeepsRequestedWidth() {
@@ -245,6 +259,8 @@ final class PRBuddyTests: XCTestCase {
         isDraft: Bool = false,
         reviewDecision: String? = "REVIEW_REQUIRED",
         changedFiles: Int? = 3,
+        additions: Int? = 12,
+        deletions: Int? = 4,
         labels: [String] = ["enhancement"],
         updatedAt: String? = "2026-05-25T00:00:00Z",
         url: String = "https://github.com/owner/project/pull/42"
@@ -259,6 +275,8 @@ final class PRBuddyTests: XCTestCase {
             isDraft: isDraft,
             reviewDecision: reviewDecision,
             changedFiles: changedFiles,
+            additions: additions,
+            deletions: deletions,
             labels: labels.map { PullRequest.Label(name: $0) },
             updatedAt: updatedAt,
             url: url

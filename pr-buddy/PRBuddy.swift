@@ -37,6 +37,8 @@ struct PullRequest: Decodable {
     let isDraft: Bool
     let reviewDecision: String?
     let changedFiles: Int?
+    let additions: Int?
+    let deletions: Int?
     let labels: [Label]
     let updatedAt: String?
     let url: String
@@ -235,7 +237,7 @@ extension PRBuddy {
             "--limit",
             String(options.limit),
             "--json",
-            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,labels,updatedAt,url"
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,updatedAt,url"
         ]
 
         let repoArguments = options.repo.flatMap { $0.isEmpty ? nil : ["--repo", $0] } ?? []

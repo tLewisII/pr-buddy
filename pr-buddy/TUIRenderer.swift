@@ -10,7 +10,7 @@ import Foundation
 
 final class TUIRenderer {
     private let headers = ["PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
-    private let maximumWidths = [6, 5, 8, 18, 24, 72, 24]
+    private let maximumWidths = [6, 18, 8, 18, 24, 72, 24]
     private var previousListLineCount = 0
 
     func printTable(_ pullRequests: [PullRequest]) {
@@ -95,7 +95,7 @@ final class TUIRenderer {
         pullRequests.map { pullRequest in
             [
                 "#\(pullRequest.number)",
-                pullRequest.changedFiles.map(String.init) ?? "-",
+                fileSummary(for: pullRequest),
                 pullRequest.statusSummary,
                 pullRequest.reviewSummary,
                 pullRequest.labelSummary.isEmpty ? "-" : pullRequest.labelSummary,
@@ -103,6 +103,24 @@ final class TUIRenderer {
                 pullRequest.author?.login ?? "-"
             ]
         }
+    }
+
+    func fileSummary(for pullRequest: PullRequest) -> String {
+        guard let changedFiles = pullRequest.changedFiles else {
+            return "-"
+        }
+
+        var parts = [String(changedFiles)]
+
+        if let additions = pullRequest.additions {
+            parts.append("+\(additions)")
+        }
+
+        if let deletions = pullRequest.deletions {
+            parts.append("-\(deletions)")
+        }
+
+        return parts.joined(separator: " ")
     }
 
     func columnWidths(headers: [String], rows: [[String]]) -> [Int] {
