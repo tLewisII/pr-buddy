@@ -14,6 +14,10 @@ final class TUIRenderer {
     private let additionsColor = "\u{001B}[38;2;26;127;55m"
     private let deletionsColor = "\u{001B}[38;2;209;36;47m"
     private let metadataColor = "\u{001B}[38;2;89;99;110m"
+    private let openStatusColor = "\u{001B}[38;2;31;136;61m"
+    private let closedStatusColor = "\u{001B}[38;2;207;34;46m"
+    private let mergedStatusColor = "\u{001B}[38;2;130;80;223m"
+    private let mergeQueueStatusColor = "\u{001B}[38;2;183;137;46m"
     private let defaultForegroundColor = "\u{001B}[39m"
     private var previousListLineCount = 0
 
@@ -148,6 +152,8 @@ final class TUIRenderer {
                     return colorized(paddedText, color: metadataColor)
                 case 1:
                     return colorizedFileSummary(paddedText)
+                case 2:
+                    return colorizedStatus(paddedText)
                 default:
                     return paddedText
                 }
@@ -157,6 +163,27 @@ final class TUIRenderer {
 
     private func colorized(_ value: String, color: String) -> String {
         color + value + defaultForegroundColor
+    }
+
+    func colorizedStatus(_ value: String) -> String {
+        let normalizedStatus = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: " ")
+            .lowercased()
+
+        switch normalizedStatus {
+        case "open":
+            return colorized(value, color: openStatusColor)
+        case "closed":
+            return colorized(value, color: closedStatusColor)
+        case "merged":
+            return colorized(value, color: mergedStatusColor)
+        case "draft":
+            return colorized(value, color: metadataColor)
+        case "merge queue", "mergequeue", "queued":
+            return colorized(value, color: mergeQueueStatusColor)
+        default:
+            return value
+        }
     }
 
     func colorizedFileSummary(_ value: String) -> String {

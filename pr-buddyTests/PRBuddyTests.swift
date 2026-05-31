@@ -262,6 +262,17 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertTrue(rendered.contains("\u{001B}[38;2;89;99;110mterry\u{001B}[39m"))
     }
 
+    func testColorizedStatusUsesStatusColors() {
+        let renderer = TUIRenderer()
+
+        XCTAssertEqual(renderer.colorizedStatus("open"), "\u{001B}[38;2;31;136;61mopen\u{001B}[39m")
+        XCTAssertEqual(renderer.colorizedStatus("closed"), "\u{001B}[38;2;207;34;46mclosed\u{001B}[39m")
+        XCTAssertEqual(renderer.colorizedStatus("merged"), "\u{001B}[38;2;130;80;223mmerged\u{001B}[39m")
+        XCTAssertEqual(renderer.colorizedStatus("draft"), "\u{001B}[38;2;89;99;110mdraft\u{001B}[39m")
+        XCTAssertEqual(renderer.colorizedStatus("merge queue"), "\u{001B}[38;2;183;137;46mmerge queue\u{001B}[39m")
+        XCTAssertEqual(renderer.colorizedStatus("merge_queue"), "\u{001B}[38;2;183;137;46mmerge_queue\u{001B}[39m")
+    }
+
     private func makePullRequest(
         number: Int = 42,
         title: String = "Fix checkout flow",
