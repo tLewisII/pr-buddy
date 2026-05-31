@@ -13,6 +13,7 @@ final class TUIRenderer {
     private let maximumWidths = [6, 18, 8, 18, 24, 72, 24]
     private let additionsColor = "\u{001B}[38;2;26;127;55m"
     private let deletionsColor = "\u{001B}[38;2;209;36;47m"
+    private let metadataColor = "\u{001B}[38;2;89;99;110m"
     private let defaultForegroundColor = "\u{001B}[39m"
     private var previousListLineCount = 0
 
@@ -141,9 +142,21 @@ final class TUIRenderer {
             .map { column, value in
                 let text = truncate(value, to: widths[column])
                 let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
-                return column == 1 ? colorizedFileSummary(paddedText) : paddedText
+
+                switch column {
+                case 0, 6:
+                    return colorized(paddedText, color: metadataColor)
+                case 1:
+                    return colorizedFileSummary(paddedText)
+                default:
+                    return paddedText
+                }
             }
             .joined(separator: "  ")
+    }
+
+    private func colorized(_ value: String, color: String) -> String {
+        color + value + defaultForegroundColor
     }
 
     func colorizedFileSummary(_ value: String) -> String {

@@ -256,8 +256,10 @@ final class PRBuddyTests: XCTestCase {
             widths: [3, 10, 4, 1, 1, 5, 5]
         )
 
+        XCTAssertTrue(rendered.contains("\u{001B}[38;2;89;99;110m#42\u{001B}[39m"))
         XCTAssertTrue(rendered.contains("\u{001B}[38;2;26;127;55m+120\u{001B}[39m"))
         XCTAssertTrue(rendered.contains("\u{001B}[38;2;209;36;47m-45\u{001B}[39m"))
+        XCTAssertTrue(rendered.contains("\u{001B}[38;2;89;99;110mterry\u{001B}[39m"))
     }
 
     private func makePullRequest(
