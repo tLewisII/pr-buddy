@@ -2,7 +2,7 @@ pr-buddy  owner/project
 Showing 1-2 of 2.  arrows/j/k move  enter on Files sort  enter/v view  c checkout  o open  r refresh  q quit
 Sorted by most files first.
 
-  PR   Files v       Status  Review           Labels             Title                                              Author
-  ---  ------------  ------  ---------------  -----------------  -------------------------------------------------  ----------
-  #42  3 +12 -4      open    review required  enhancement        Fix checkout flow                                  terry
-> #7   12 +1200 -50  draft   approved         bug, needs review  Ship snapshot renderer that truncates long titles  alexandria
+  PR   Files v       Status  Review   Labels             Title                                              Author
+  ---  ------------  ------  -------  -----------------  -------------------------------------------------  ----------
+  #42  3 +12 -4      open    1        enhancement        Fix checkout flow                                  terry
+> #7   12 +1200 -50  draft   3 ✓ ✓ ✓  bug, needs review  Ship snapshot renderer that truncates long titles  alexandria

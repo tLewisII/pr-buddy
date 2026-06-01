@@ -365,16 +365,29 @@ final class PRBuddyTests: XCTestCase {
             changedFiles: nil,
             additions: nil,
             deletions: nil,
-            labels: []
+            labels: [],
+            reviews: nil
         )
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
         XCTAssertEqual(rows[0][0], "#42")
         XCTAssertEqual(rows[0][1], "-")
-        XCTAssertEqual(rows[0][3], "-")
+        XCTAssertEqual(rows[0][3], "0")
         XCTAssertEqual(rows[0][4], "-")
         XCTAssertEqual(rows[0][6], "-")
+    }
+
+    func testTableRowsFormatsReviewCountAndStatusIcons() {
+        let pullRequest = makePullRequest(
+            reviewDecision: nil,
+            reviews: nil,
+            reviewStates: ["APPROVED", "CHANGES_REQUESTED", "COMMENTED"]
+        )
+
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][3], "3 ✓ ✕ 🗨")
     }
 
     func testTableRowsFormatsChangedFileStats() {
@@ -452,6 +465,15 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(renderer.colorizedStatus("draft"), "\u{001B}[38;2;89;99;110mdraft\u{001B}[39m")
         XCTAssertEqual(renderer.colorizedStatus("merge queue"), "\u{001B}[38;2;183;137;46mmerge queue\u{001B}[39m")
         XCTAssertEqual(renderer.colorizedStatus("merge_queue"), "\u{001B}[38;2;183;137;46mmerge_queue\u{001B}[39m")
+    }
+
+    func testColorizedReviewSummaryUsesReviewIconColors() {
+        let renderer = TUIRenderer()
+
+        XCTAssertEqual(
+            renderer.colorizedReviewSummary("3 ✓ ✕ 🗨"),
+            "3 \u{001B}[38;2;31;136;61m✓\u{001B}[39m \u{001B}[38;2;207;34;46m✕\u{001B}[39m \u{001B}[38;2;89;99;110m🗨\u{001B}[39m"
+        )
     }
 
     func testSinglePanePullRequestListMatchesSnapshot() throws {
@@ -576,6 +598,7 @@ final class PRBuddyTests: XCTestCase {
         deletions: Int? = 4,
         labels: [String] = ["enhancement"],
         reviews: Int? = 1,
+        reviewStates: [String]? = nil,
         updatedAt: String? = "2026-05-25T00:00:00Z",
         url: String = "https://github.com/owner/project/pull/42"
     ) -> PullRequest {
@@ -592,7 +615,8 @@ final class PRBuddyTests: XCTestCase {
             additions: additions,
             deletions: deletions,
             labels: labels.map { PullRequest.Label(name: $0) },
-            reviews: reviews.map { Array(repeating: PullRequest.Review(), count: $0) },
+            reviews: reviewStates.map { $0.map { PullRequest.Review(state: $0) } }
+                ?? reviews.map { Array(repeating: PullRequest.Review(), count: $0) },
             updatedAt: updatedAt,
             url: url
         )

@@ -352,7 +352,9 @@ final class TUIRenderer {
                     return colorizedFileSummary(paddedText)
                 case .status:
                     return colorizedStatus(paddedText)
-                case .review, .labels, .title, .unknown:
+                case .review:
+                    return colorizedReviewSummary(paddedText)
+                case .labels, .title, .unknown:
                     return paddedText
                 }
             }
@@ -399,6 +401,22 @@ final class TUIRenderer {
 
     func colorizedStatus(_ value: String) -> String {
         TUIFormat.colorizedStatus(value)
+    }
+
+    func colorizedReviewSummary(_ value: String) -> String {
+        value.map { character in
+            switch character {
+            case "✓":
+                return TUIFormat.colorized(String(character), color: TUIFormat.Color.openStatus)
+            case "✕":
+                return TUIFormat.colorized(String(character), color: TUIFormat.Color.closedStatus)
+            case "🗨":
+                return TUIFormat.colorized(String(character), color: TUIFormat.Color.metadata)
+            default:
+                return String(character)
+            }
+        }
+        .joined()
     }
 
     func colorizedFileSummary(_ value: String) -> String {

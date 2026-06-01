@@ -60,7 +60,13 @@ struct PullRequest: Decodable {
         let name: String
     }
 
-    struct Review: Decodable {}
+    struct Review: Decodable {
+        let state: String?
+
+        init(state: String? = nil) {
+            self.state = state
+        }
+    }
 
     let number: Int
     let title: String
@@ -87,13 +93,16 @@ struct PullRequest: Decodable {
     }
 
     var reviewSummary: String {
-        guard let reviewDecision else {
-            return "-"
+        guard reviewCount > 0 else {
+            return "0"
         }
 
-        return reviewDecision
-            .replacingOccurrences(of: "_", with: " ")
-            .lowercased()
+        let icons = reviewStatusIcons
+        guard !icons.isEmpty else {
+            return String(reviewCount)
+        }
+
+        return ([String(reviewCount)] + icons).joined(separator: " ")
     }
 
     var labelSummary: String {
@@ -102,6 +111,39 @@ struct PullRequest: Decodable {
 
     var reviewCount: Int {
         reviews?.count ?? 0
+    }
+
+    private var reviewStatusIcons: [String] {
+        let reviewStates = reviews?.compactMap(\.state) ?? []
+        let states = reviewStates.isEmpty ? fallbackReviewStates : reviewStates
+
+        return states.compactMap { state in
+            switch normalizedReviewState(state) {
+            case "approved":
+                return "✓"
+            case "changes requested":
+                return "✕"
+            case "commented":
+                return "🗨"
+            default:
+                return nil
+            }
+        }
+    }
+
+    private var fallbackReviewStates: [String] {
+        guard let reviewDecision else {
+            return []
+        }
+
+        return Array(repeating: reviewDecision, count: reviewCount)
+    }
+
+    private func normalizedReviewState(_ state: String) -> String {
+        state
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: " ")
+            .lowercased()
     }
 }
 
