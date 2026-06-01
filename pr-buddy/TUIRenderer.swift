@@ -9,6 +9,37 @@ import Darwin
 import Foundation
 
 final class TUIRenderer {
+    private enum TableColumn {
+        case number
+        case files
+        case status
+        case review
+        case labels
+        case title
+        case author
+        case unknown
+
+        init(index: Int) {
+            if index == 0 {
+                self = .number
+            } else if index == 1 {
+                self = .files
+            } else if index == 2 {
+                self = .status
+            } else if index == 3 {
+                self = .review
+            } else if index == 4 {
+                self = .labels
+            } else if index == 5 {
+                self = .title
+            } else if index == 6 {
+                self = .author
+            } else {
+                self = .unknown
+            }
+        }
+    }
+
     private let rightPaneRenderer = TUIRightPaneRenderer()
     private let headers = ["PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
     private let maximumWidths = [6, 18, 8, 18, 24, 72, 24]
@@ -247,14 +278,14 @@ final class TUIRenderer {
                 let text = truncate(value, to: widths[column])
                 let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
 
-                switch column {
-                case 0, 6:
+                switch TableColumn(index: column) {
+                case .number, .author:
                     return TUIFormat.colorized(paddedText, color: TUIFormat.Color.metadata)
-                case 1:
+                case .files:
                     return colorizedFileSummary(paddedText)
-                case 2:
+                case .status:
                     return colorizedStatus(paddedText)
-                default:
+                case .review, .labels, .title, .unknown:
                     return paddedText
                 }
             }

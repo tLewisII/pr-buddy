@@ -1,6 +1,31 @@
 import Foundation
 
 enum TUIFormat {
+    private enum DisplayStatus {
+        case open
+        case closed
+        case merged
+        case draft
+        case mergeQueue
+        case unknown
+
+        init(normalizedStatus: String) {
+            if normalizedStatus == "open" {
+                self = .open
+            } else if normalizedStatus == "closed" {
+                self = .closed
+            } else if normalizedStatus == "merged" {
+                self = .merged
+            } else if normalizedStatus == "draft" {
+                self = .draft
+            } else if normalizedStatus == "merge queue" || normalizedStatus == "mergequeue" || normalizedStatus == "queued" {
+                self = .mergeQueue
+            } else {
+                self = .unknown
+            }
+        }
+    }
+
     enum Color {
         static let additions = "\u{001B}[38;2;26;127;55m"
         static let deletions = "\u{001B}[38;2;209;36;47m"
@@ -29,18 +54,18 @@ enum TUIFormat {
             .replacingOccurrences(of: "_", with: " ")
             .lowercased()
 
-        switch normalizedStatus {
-        case "open":
+        switch DisplayStatus(normalizedStatus: normalizedStatus) {
+        case .open:
             return colorized(value, color: Color.openStatus)
-        case "closed":
+        case .closed:
             return colorized(value, color: Color.closedStatus)
-        case "merged":
+        case .merged:
             return colorized(value, color: Color.mergedStatus)
-        case "draft":
+        case .draft:
             return colorized(value, color: Color.metadata)
-        case "merge queue", "mergequeue", "queued":
+        case .mergeQueue:
             return colorized(value, color: Color.mergeQueueStatus)
-        default:
+        case .unknown:
             return value
         }
     }

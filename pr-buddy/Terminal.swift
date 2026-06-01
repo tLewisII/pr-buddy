@@ -1,5 +1,48 @@
 import Darwin
 
+private enum TerminalByte {
+    case enter
+    case escape
+    case c
+    case h
+    case j
+    case k
+    case l
+    case o
+    case q
+    case r
+    case v
+    case unknown
+
+    init(_ byte: UInt8) {
+        if byte == 10 || byte == 13 {
+            self = .enter
+        } else if byte == 27 {
+            self = .escape
+        } else if byte == 99 || byte == 67 {
+            self = .c
+        } else if byte == 104 || byte == 72 {
+            self = .h
+        } else if byte == 106 || byte == 74 {
+            self = .j
+        } else if byte == 107 || byte == 75 {
+            self = .k
+        } else if byte == 108 || byte == 76 {
+            self = .l
+        } else if byte == 111 || byte == 79 {
+            self = .o
+        } else if byte == 113 || byte == 81 {
+            self = .q
+        } else if byte == 114 || byte == 82 {
+            self = .r
+        } else if byte == 118 || byte == 86 {
+            self = .v
+        } else {
+            self = .unknown
+        }
+    }
+}
+
 final class RawTerminalMode {
     private let original: termios
 
@@ -32,10 +75,10 @@ func readKey() -> InputKey {
         return .unknown
     }
 
-    switch byte {
-    case 10, 13:
+    switch TerminalByte(byte) {
+    case .enter:
         return .enter
-    case 27:
+    case .escape:
         var sequence = [UInt8](repeating: 0, count: 2)
 
         guard read(STDIN_FILENO, &sequence, 2) == 2 else {
@@ -53,25 +96,25 @@ func readKey() -> InputKey {
         } else {
             return .unknown
         }
-    case 99, 67:
+    case .c:
         return .c
-    case 104, 72:
+    case .h:
         return .h
-    case 106, 74:
+    case .j:
         return .j
-    case 107, 75:
+    case .k:
         return .k
-    case 108, 76:
+    case .l:
         return .l
-    case 111, 79:
+    case .o:
         return .o
-    case 113, 81:
+    case .q:
         return .q
-    case 114, 82:
+    case .r:
         return .r
-    case 118, 86:
+    case .v:
         return .v
-    default:
+    case .unknown:
         return .unknown
     }
 }

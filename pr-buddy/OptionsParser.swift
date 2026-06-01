@@ -2,6 +2,22 @@ import ArgumentParser
 import Foundation
 
 enum OptionsParser {
+    private enum ParsedIntRange {
+        case exact(String)
+        case bounds(min: String, max: String)
+        case invalid
+
+        init(parts: [String]) {
+            if parts.count == 1 {
+                self = .exact(parts[0])
+            } else if parts.count == 2 {
+                self = .bounds(min: parts[0], max: parts[1])
+            } else {
+                self = .invalid
+            }
+        }
+    }
+
     static func validate(_ options: Options) throws {
         if let minChangedFiles = options.changedFilesRange.min,
            let maxChangedFiles = options.changedFilesRange.max,
@@ -69,15 +85,15 @@ enum OptionsParser {
 
         let parts = value.components(separatedBy: "..")
 
-        switch parts.count {
-        case 1:
-            let count = try parseInt(parts[0], option: option)
+        switch ParsedIntRange(parts: parts) {
+        case .exact(let value):
+            let count = try parseInt(value, option: option)
             return CountRange(min: count, max: count)
-        case 2:
-            let min = parts[0].isEmpty ? nil : try parseInt(parts[0], option: option)
-            let max = parts[1].isEmpty ? nil : try parseInt(parts[1], option: option)
+        case .bounds(let minValue, let maxValue):
+            let min = minValue.isEmpty ? nil : try parseInt(minValue, option: option)
+            let max = maxValue.isEmpty ? nil : try parseInt(maxValue, option: option)
             return CountRange(min: min, max: max)
-        default:
+        case .invalid:
             throw ValidationError("\(option) expects a number or range, for example 3, 2..8, ..5, or 10..")
         }
     }
