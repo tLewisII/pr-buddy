@@ -111,10 +111,26 @@ enum CommandRunner {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [executable] + arguments
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+        let uniqueIdentifier = UUID().uuidString
+        let stdoutURL = temporaryDirectory.appendingPathComponent("pr-buddy-\(uniqueIdentifier)-stdout")
+        let stderrURL = temporaryDirectory.appendingPathComponent("pr-buddy-\(uniqueIdentifier)-stderr")
+
+        fileManager.createFile(atPath: stdoutURL.path, contents: nil)
+        fileManager.createFile(atPath: stderrURL.path, contents: nil)
+
+        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
+        process.standardOutput = stdoutHandle
+        process.standardError = stderrHandle
+
+        defer {
+            try? stdoutHandle.close()
+            try? stderrHandle.close()
+            try? fileManager.removeItem(at: stdoutURL)
+            try? fileManager.removeItem(at: stderrURL)
+        }
 
         do {
             try process.run()
@@ -123,10 +139,13 @@ enum CommandRunner {
             throw AppError.commandFailed("Could not run `\(executable)`: \(error.localizedDescription)")
         }
 
+        let stdoutData = (try? Data(contentsOf: stdoutURL)) ?? Data()
+        let stderrData = (try? Data(contentsOf: stderrURL)) ?? Data()
+
         return CommandResult(
             exitCode: process.terminationStatus,
-            stdoutData: stdoutPipe.fileHandleForReading.readDataToEndOfFile(),
-            stderrData: stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            stdoutData: stdoutData,
+            stderrData: stderrData
         )
     }
 }

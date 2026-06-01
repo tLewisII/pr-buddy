@@ -546,6 +546,18 @@ final class PRBuddyTests: XCTestCase {
         try assertSnapshot(rendered, named: "dual-pane-pr-list.txt")
     }
 
+    func testCommandRunnerDrainsLargeStdoutWithoutBlocking() throws {
+        let result = try CommandRunner.run(
+            "/bin/sh",
+            arguments: ["-c", "yes x | head -c 1048576"]
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr.count, 0)
+        XCTAssertEqual(result.stdout.count, 1_048_576)
+        XCTAssertTrue(result.stdout.hasPrefix("x\nx\n"))
+    }
+
     private func assertSnapshot(
         _ actual: String,
         named name: String,
