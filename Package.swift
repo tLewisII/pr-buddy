@@ -21,7 +21,10 @@ let package = Package(
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
-            path: "pr-buddy"
+            path: "pr-buddy",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
         ),
         .executableTarget(
             name: "pr-buddyCLI",

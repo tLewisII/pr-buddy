@@ -16,12 +16,12 @@ struct PRBuddy {
 
     static func run(options: Options) throws {
         let arguments = pullRequestListArguments(options: options)
-        let pullRequests = try fetchPullRequests(arguments: arguments)
+        let pullRequests = try fetchPullRequests(arguments: arguments, options: options)
             .filter { matchesFilters($0, options: options) }
 
         if isatty(STDIN_FILENO) != 0 {
             let attentionPullRequests = options.showMyPRs
-                ? try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+                ? try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options), options: options)
                 : []
             try runInteractiveTUI(
                 initialPullRequests: pullRequests,
@@ -86,6 +86,11 @@ private struct PRBuddyCommand: ParsableCommand {
     @Flag(name: .customLong("show-my-prs"), help: "Show a right pane with open PRs that involve you.")
     var showMyPRs = false
 
+#if DEBUG
+    @Option(name: .customLong("debug-json"), help: "DEBUG only: read pull request JSON from a local file instead of running `gh pr list`.")
+    var debugJSONPath: String?
+#endif
+
     mutating func validate() throws {
         _ = try parsedOptions()
     }
@@ -104,6 +109,9 @@ private struct PRBuddyCommand: ParsableCommand {
         options.maxChangedFiles = maxChangedFiles
         options.limit = limit
         options.showMyPRs = showMyPRs
+#if DEBUG
+        options.debugJSONPath = debugJSONPath
+#endif
 
         if let changedFiles {
             try PRBuddy.parseChangedFilesRange(changedFiles, into: &options)
@@ -139,6 +147,13 @@ extension PRBuddy {
         if let repo = options.repo, repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ValidationError("--repo cannot be empty.")
         }
+
+#if DEBUG
+        if let debugJSONPath = options.debugJSONPath,
+           debugJSONPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw ValidationError("--debug-json cannot be empty.")
+        }
+#endif
     }
 
     fileprivate static func splitCSV(_ value: String) -> [String] {
@@ -225,7 +240,13 @@ extension PRBuddy {
         return pullRequestListArguments(options: attentionOptions)
     }
 
-    private static func fetchPullRequests(arguments: [String]) throws -> [PullRequest] {
+    private static func fetchPullRequests(arguments: [String], options: Options) throws -> [PullRequest] {
+#if DEBUG
+        if let debugJSONPath = options.debugJSONPath {
+            return try loadPullRequests(fromJSONFile: debugJSONPath)
+        }
+#endif
+
         let result = try runCommand("gh", arguments: arguments)
 
         guard result.exitCode == 0 else {
@@ -238,6 +259,19 @@ extension PRBuddy {
             throw AppError.decodingFailed("Could not parse `gh pr list` output: \(error)")
         }
     }
+
+#if DEBUG
+    private static func loadPullRequests(fromJSONFile path: String) throws -> [PullRequest] {
+        let url = URL(fileURLWithPath: path)
+
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode([PullRequest].self, from: data)
+        } catch {
+            throw AppError.decodingFailed("Could not parse `\(path)`: \(error)")
+        }
+    }
+#endif
 
     static func matchesFilters(_ pullRequest: PullRequest, options: Options) -> Bool {
         if let minChangedFiles = options.minChangedFiles,
@@ -451,7 +485,7 @@ extension PRBuddy {
 
                 renderer.drawCommandResult(
                     title: "PR #\(selectedPullRequest.number)",
-                    result: try runPRCommand(["view", String(selectedPullRequest.number)], repo: options.repo)
+                    result: try runPRCommand(["view", String(selectedPullRequest.number)], options: options)
                 )
                 _ = readKey()
                 message = "Returned from details."
@@ -474,7 +508,7 @@ extension PRBuddy {
 
                 renderer.drawCommandResult(
                     title: "PR #\(selectedPullRequest.number)",
-                    result: try runPRCommand(["view", String(selectedPullRequest.number)], repo: options.repo)
+                    result: try runPRCommand(["view", String(selectedPullRequest.number)], options: options)
                 )
                 _ = readKey()
                 message = "Returned from details."
@@ -497,7 +531,7 @@ extension PRBuddy {
 
                 renderer.drawCommandResult(
                     title: "Checkout #\(selectedPullRequest.number)",
-                    result: try runPRCommand(["checkout", String(selectedPullRequest.number)], repo: options.repo)
+                    result: try runPRCommand(["checkout", String(selectedPullRequest.number)], options: options)
                 )
                 _ = readKey()
                 message = "Checkout command finished."
@@ -518,18 +552,18 @@ extension PRBuddy {
                     continue
                 }
 
-                let result = try runPRCommand(["view", String(selectedPullRequest.number), "--web"], repo: options.repo)
+                let result = try runPRCommand(["view", String(selectedPullRequest.number), "--web"], options: options)
                 message = result.exitCode == 0 ? "Opened #\(selectedPullRequest.number) in browser." : result.stderr
             case .r:
                 let arguments = pullRequestListArguments(options: options)
                 let selectedPRNumber = pullRequests.indices.contains(selectedIndex) ? pullRequests[selectedIndex].number : nil
                 let selectedAttentionPRNumber = options.showMyPRs && attentionPullRequests.indices.contains(attentionSelectedIndex) ? attentionPullRequests[attentionSelectedIndex].number : nil
 
-                basePullRequests = try fetchPullRequests(arguments: arguments)
+                basePullRequests = try fetchPullRequests(arguments: arguments, options: options)
                     .filter { matchesFilters($0, options: options) }
                 pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
                 attentionPullRequests = options.showMyPRs
-                    ? try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+                    ? try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options), options: options)
                     : []
 
                 if let selectedPRNumber,
@@ -624,8 +658,35 @@ extension PRBuddy {
         return pullRequestText + " and \(attentionPullRequests.count) attention item\(attentionPullRequests.count == 1 ? "" : "s")."
     }
 
-    private static func runPRCommand(_ arguments: [String], repo: String?) throws -> CommandResult {
-        let repoArguments = repo.flatMap { $0.isEmpty ? nil : ["--repo", $0] } ?? []
+#if DEBUG
+    static func debugCommandResult(arguments: [String], jsonPath: String) -> CommandResult {
+        let command = (["gh", "pr"] + arguments).joined(separator: " ")
+        let stdout = """
+        DEBUG fixture mode is enabled.
+
+        Skipped command:
+        \(command)
+
+        Pull request list data is being read from:
+        \(jsonPath)
+        """
+
+        return CommandResult(
+            exitCode: 0,
+            stdoutData: Data(stdout.utf8),
+            stderrData: Data()
+        )
+    }
+#endif
+
+    private static func runPRCommand(_ arguments: [String], options: Options) throws -> CommandResult {
+#if DEBUG
+        if let debugJSONPath = options.debugJSONPath {
+            return debugCommandResult(arguments: arguments, jsonPath: debugJSONPath)
+        }
+#endif
+
+        let repoArguments = options.repo.flatMap { $0.isEmpty ? nil : ["--repo", $0] } ?? []
         let ghArguments = ["pr"] + arguments + repoArguments
         return try runCommand("gh", arguments: ghArguments)
     }

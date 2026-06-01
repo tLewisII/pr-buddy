@@ -32,6 +32,33 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertFalse(options.showMyPRs)
     }
 
+#if DEBUG
+    func testParseOptionsAcceptsDebugJSONPathInDebugBuilds() throws {
+        let options = try PRBuddy.parseOptions(["--debug-json", "fixtures/all-options-prs.json"])
+
+        XCTAssertEqual(options.debugJSONPath, "fixtures/all-options-prs.json")
+    }
+
+    func testParseOptionsRejectsEmptyDebugJSONPath() {
+        XCTAssertThrowsError(try PRBuddy.parseOptions(["--debug-json", "   "])) { error in
+            XCTAssertTrue(String(describing: error).contains("--debug-json cannot be empty"))
+        }
+    }
+
+    func testDebugCommandResultSkipsGhCommand() {
+        let result = PRBuddy.debugCommandResult(
+            arguments: ["view", "101"],
+            jsonPath: "fixtures/all-options-prs.json"
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("DEBUG fixture mode is enabled."))
+        XCTAssertTrue(result.stdout.contains("gh pr view 101"))
+        XCTAssertTrue(result.stdout.contains("fixtures/all-options-prs.json"))
+        XCTAssertTrue(result.stderr.isEmpty)
+    }
+#endif
+
     func testParseOptionsRejectsInvalidFileRange() {
         XCTAssertThrowsError(try PRBuddy.parseOptions(["--min-files", "10", "--max-files", "2"])) { error in
             XCTAssertTrue(String(describing: error).contains("--min-files cannot be greater than --max-files"))

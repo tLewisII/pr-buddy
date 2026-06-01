@@ -18,6 +18,9 @@ struct Options {
     var maxReviews: Int?
     var limit = 50
     var showMyPRs = false
+#if DEBUG
+    var debugJSONPath: String?
+#endif
 }
 
 struct PullRequest: Decodable {

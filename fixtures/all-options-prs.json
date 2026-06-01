@@ -1,0 +1,218 @@
+[
+  {
+    "number": 101,
+    "title": "Open ready PR with approved review and multiple labels",
+    "author": {
+      "login": "alice"
+    },
+    "headRefName": "feature/approved-ready",
+    "baseRefName": "main",
+    "state": "OPEN",
+    "isDraft": false,
+    "reviewDecision": "APPROVED",
+    "changedFiles": 2,
+    "additions": 34,
+    "deletions": 5,
+    "labels": [
+      {
+        "name": "bug"
+      },
+      {
+        "name": "needs review"
+      },
+      {
+        "name": "frontend"
+      }
+    ],
+    "reviews": [
+      {},
+      {}
+    ],
+    "updatedAt": "2026-05-31T14:10:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/101"
+  },
+  {
+    "number": 102,
+    "title": "Draft PR with review required and zero changed files",
+    "author": {
+      "login": "bob"
+    },
+    "headRefName": "wip/draft-flow",
+    "baseRefName": "develop",
+    "state": "OPEN",
+    "isDraft": true,
+    "reviewDecision": "REVIEW_REQUIRED",
+    "changedFiles": 0,
+    "additions": 0,
+    "deletions": 0,
+    "labels": [
+      {
+        "name": "WIP"
+      },
+      {
+        "name": "backend"
+      }
+    ],
+    "reviews": [],
+    "updatedAt": "2026-05-31T13:05:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/102"
+  },
+  {
+    "number": 103,
+    "title": "Merged PR with changes requested token and large file count",
+    "author": {
+      "login": "carol"
+    },
+    "headRefName": "feature/large-change",
+    "baseRefName": "main",
+    "state": "MERGED",
+    "isDraft": false,
+    "reviewDecision": "CHANGES_REQUESTED",
+    "changedFiles": 18,
+    "additions": 1200,
+    "deletions": 450,
+    "labels": [
+      {
+        "name": "migration"
+      },
+      {
+        "name": "needs-review"
+      }
+    ],
+    "reviews": [
+      {},
+      {},
+      {},
+      {}
+    ],
+    "updatedAt": "2026-05-30T20:15:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/103"
+  },
+  {
+    "number": 104,
+    "title": "Closed PR without a review decision",
+    "author": {
+      "login": "drew"
+    },
+    "headRefName": "fix/closed-no-review",
+    "baseRefName": "release/1.2",
+    "state": "CLOSED",
+    "isDraft": false,
+    "reviewDecision": null,
+    "changedFiles": 5,
+    "additions": 80,
+    "deletions": 12,
+    "labels": [
+      {
+        "name": "wontfix"
+      },
+      {
+        "name": "docs"
+      }
+    ],
+    "reviews": null,
+    "updatedAt": "2026-05-29T09:00:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/104"
+  },
+  {
+    "number": 105,
+    "title": "Queued PR to exercise merge queue status coloring",
+    "author": {
+      "login": "erin"
+    },
+    "headRefName": "queue/release-candidate",
+    "baseRefName": "main",
+    "state": "MERGE_QUEUE",
+    "isDraft": false,
+    "reviewDecision": "APPROVED",
+    "changedFiles": 7,
+    "additions": 210,
+    "deletions": 30,
+    "labels": [
+      {
+        "name": "release"
+      },
+      {
+        "name": "ready"
+      }
+    ],
+    "reviews": [
+      {},
+      {},
+      {}
+    ],
+    "updatedAt": "2026-05-31T15:45:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/105"
+  },
+  {
+    "number": 106,
+    "title": "PR with missing optional values for fallback rendering",
+    "author": null,
+    "headRefName": null,
+    "baseRefName": null,
+    "state": "OPEN",
+    "isDraft": false,
+    "reviewDecision": null,
+    "changedFiles": null,
+    "additions": null,
+    "deletions": null,
+    "labels": [],
+    "reviews": null,
+    "updatedAt": null,
+    "url": "https://github.com/example/pr-buddy/pull/106"
+  },
+  {
+    "number": 107,
+    "title": "Long title PR that should truncate cleanly in the terminal table without disturbing neighboring columns",
+    "author": {
+      "login": "frank-with-a-long-login"
+    },
+    "headRefName": "feature/very-long-branch-name-that-needs-truncation",
+    "baseRefName": "main",
+    "state": "OPEN",
+    "isDraft": false,
+    "reviewDecision": "REVIEW_REQUIRED",
+    "changedFiles": 1,
+    "additions": 3,
+    "deletions": 1,
+    "labels": [
+      {
+        "name": "ui"
+      },
+      {
+        "name": "accessibility"
+      },
+      {
+        "name": "long-label-name-for-truncation"
+      }
+    ],
+    "reviews": [
+      {}
+    ],
+    "updatedAt": "2026-05-28T18:30:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/107"
+  },
+  {
+    "number": 108,
+    "title": "Ready PR with no labels and exact review count target",
+    "author": {
+      "login": "grace"
+    },
+    "headRefName": "feature/exact-review-count",
+    "baseRefName": "main",
+    "state": "OPEN",
+    "isDraft": false,
+    "reviewDecision": "APPROVED",
+    "changedFiles": 3,
+    "additions": 75,
+    "deletions": 25,
+    "labels": [],
+    "reviews": [
+      {},
+      {},
+      {}
+    ],
+    "updatedAt": "2026-05-27T16:20:00Z",
+    "url": "https://github.com/example/pr-buddy/pull/108"
+  }
+]
