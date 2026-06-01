@@ -8,13 +8,6 @@
 import Foundation
 
 final class TUIRightPaneRenderer {
-    private let metadataColor = "\u{001B}[38;2;89;99;110m"
-    private let openStatusColor = "\u{001B}[38;2;31;136;61m"
-    private let closedStatusColor = "\u{001B}[38;2;207;34;46m"
-    private let mergedStatusColor = "\u{001B}[38;2;130;80;223m"
-    private let mergeQueueStatusColor = "\u{001B}[38;2;183;137;46m"
-    private let defaultForegroundColor = "\u{001B}[39m"
-
     func paneWidth(for terminalWidth: Int) -> Int {
         min(max(36, terminalWidth / 3), max(36, terminalWidth - 34))
     }
@@ -34,14 +27,8 @@ final class TUIRightPaneRenderer {
 
     func columnWidths(rows: [[String]], availableWidth: Int) -> [Int] {
         let headers = ["Title", "Status"]
-        return headers.indices.map { column in
-            let contentWidth = ([headers[column]] + rows.map { $0[column] })
-                .map(\.count)
-                .max() ?? headers[column].count
-
-            let maximumWidth = column == 0 ? max(16, availableWidth - 10) : 8
-            return min(maximumWidth, max(headers[column].count, contentWidth))
-        }
+        let maximumWidths = [max(16, availableWidth - 10), 8]
+        return TUIFormat.columnWidths(headers: headers, rows: rows, maximumWidths: maximumWidths)
     }
 
     func title(count: Int) -> String {
@@ -59,7 +46,7 @@ final class TUIRightPaneRenderer {
             return rendered
         }
 
-        return "\u{001B}[7m>\(rendered.dropFirst())\u{001B}[0m"
+        return TUIFormat.inverted(">\(rendered.dropFirst())")
     }
 
     func line(
@@ -101,7 +88,7 @@ final class TUIRightPaneRenderer {
                 let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
 
                 if column == 1 {
-                    return colorizedStatus(paddedText)
+                    return TUIFormat.colorizedStatus(paddedText)
                 }
 
                 return paddedText
@@ -109,45 +96,8 @@ final class TUIRightPaneRenderer {
             .joined(separator: "  ")
     }
 
-    private func colorizedStatus(_ value: String) -> String {
-        let normalizedStatus = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "_", with: " ")
-            .lowercased()
-
-        switch normalizedStatus {
-        case "open":
-            return colorized(value, color: openStatusColor)
-        case "closed":
-            return colorized(value, color: closedStatusColor)
-        case "merged":
-            return colorized(value, color: mergedStatusColor)
-        case "draft":
-            return colorized(value, color: metadataColor)
-        case "merge queue", "mergequeue", "queued":
-            return colorized(value, color: mergeQueueStatusColor)
-        default:
-            return value
-        }
-    }
-
-    private func colorized(_ value: String, color: String) -> String {
-        color + value + defaultForegroundColor
-    }
-
     private func truncate(_ value: String, to width: Int) -> String {
-        guard value.count > width else {
-            return value
-        }
-
-        guard width > 1 else {
-            return String(value.prefix(width))
-        }
-
-        guard width > 3 else {
-            return String(value.prefix(width))
-        }
-
-        return String(value.prefix(width - 3)) + "..."
+        TUIFormat.truncate(value, to: width)
     }
 
     private func centeredRowIndex(in visibleRows: Int) -> Int {
@@ -155,37 +105,6 @@ final class TUIRightPaneRenderer {
     }
 
     private func centeredText(_ text: String, width: Int) -> String {
-        let visibleTextLength = visibleLength(text)
-
-        guard width > visibleTextLength else {
-            return text
-        }
-
-        let leadingPadding = (width - visibleTextLength) / 2
-        return String(repeating: " ", count: leadingPadding) + text
-    }
-
-    private func visibleLength(_ value: String) -> Int {
-        var count = 0
-        var isEscapeSequence = false
-
-        for character in value {
-            if character == "\u{001B}" {
-                isEscapeSequence = true
-                continue
-            }
-
-            if isEscapeSequence {
-                if character.isLetter {
-                    isEscapeSequence = false
-                }
-
-                continue
-            }
-
-            count += 1
-        }
-
-        return count
+        TUIFormat.centeredText(text, width: width)
     }
 }

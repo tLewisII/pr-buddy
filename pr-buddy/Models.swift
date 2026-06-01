@@ -23,6 +23,34 @@ struct Options {
 #endif
 }
 
+struct CountRange {
+    let min: Int?
+    let max: Int?
+
+    func contains(_ value: Int) -> Bool {
+        if let min, value < min {
+            return false
+        }
+
+        if let max, value > max {
+            return false
+        }
+
+        return true
+    }
+
+}
+
+extension Options {
+    var changedFilesRange: CountRange {
+        CountRange(min: minChangedFiles, max: maxChangedFiles)
+    }
+
+    var reviewsRange: CountRange {
+        CountRange(min: minReviews, max: maxReviews)
+    }
+}
+
 struct PullRequest: Decodable {
     struct Author: Decodable {
         let login: String?

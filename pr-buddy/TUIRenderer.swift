@@ -12,14 +12,6 @@ final class TUIRenderer {
     private let rightPaneRenderer = TUIRightPaneRenderer()
     private let headers = ["PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
     private let maximumWidths = [6, 18, 8, 18, 24, 72, 24]
-    private let additionsColor = "\u{001B}[38;2;26;127;55m"
-    private let deletionsColor = "\u{001B}[38;2;209;36;47m"
-    private let metadataColor = "\u{001B}[38;2;89;99;110m"
-    private let openStatusColor = "\u{001B}[38;2;31;136;61m"
-    private let closedStatusColor = "\u{001B}[38;2;207;34;46m"
-    private let mergedStatusColor = "\u{001B}[38;2;130;80;223m"
-    private let mergeQueueStatusColor = "\u{001B}[38;2;183;137;46m"
-    private let defaultForegroundColor = "\u{001B}[39m"
     private var previousListLineCount = 0
 
     func printTable(_ pullRequests: [PullRequest]) {
@@ -112,7 +104,7 @@ final class TUIRenderer {
                 let isSelectedRow = !isFilesHeaderSelected && isMainPaneSelected && mainIndex == selectedIndex
                 let marker = isSelectedRow ? ">" : " "
                 let rendered = "\(marker) " + renderRow(rows[mainIndex], widths: widths)
-                left = isSelectedRow ? "\u{001B}[7m\(rendered)\u{001B}[0m" : rendered
+                left = isSelectedRow ? TUIFormat.inverted(rendered) : rendered
             } else if rows.isEmpty && offset == 0 {
                 left = "  No pull requests matched the current filters."
             } else {
@@ -169,7 +161,7 @@ final class TUIRenderer {
             let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
 
             if isSelectedRow {
-                lines.append("\u{001B}[7m\(rendered)\u{001B}[0m")
+                lines.append(TUIFormat.inverted(rendered))
             } else {
                 lines.append(rendered)
             }
@@ -242,13 +234,7 @@ final class TUIRenderer {
     }
 
     private func columnWidths(headers: [String], rows: [[String]], maximumWidths: [Int]) -> [Int] {
-        headers.indices.map { column in
-            let contentWidth = ([headers[column]] + rows.map { $0[column] })
-                .map(\.count)
-                .max() ?? headers[column].count
-
-            return min(maximumWidths[column], max(headers[column].count, contentWidth))
-        }
+        TUIFormat.columnWidths(headers: headers, rows: rows, maximumWidths: maximumWidths)
     }
 
     func attentionColumnWidths(rows: [[String]]) -> [Int] {
@@ -263,7 +249,7 @@ final class TUIRenderer {
 
                 switch column {
                 case 0, 6:
-                    return colorized(paddedText, color: metadataColor)
+                    return TUIFormat.colorized(paddedText, color: TUIFormat.Color.metadata)
                 case 1:
                     return colorizedFileSummary(paddedText)
                 case 2:
@@ -300,7 +286,7 @@ final class TUIRenderer {
                     return paddedText
                 }
 
-                return "\u{001B}[7m\(paddedText)\u{001B}[0m"
+                return TUIFormat.inverted(paddedText)
             }
             .joined(separator: "  ")
     }
@@ -313,29 +299,8 @@ final class TUIRenderer {
         rightPaneRenderer.row(row, widths: widths, isSelected: isSelected)
     }
 
-    private func colorized(_ value: String, color: String) -> String {
-        color + value + defaultForegroundColor
-    }
-
     func colorizedStatus(_ value: String) -> String {
-        let normalizedStatus = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "_", with: " ")
-            .lowercased()
-
-        switch normalizedStatus {
-        case "open":
-            return colorized(value, color: openStatusColor)
-        case "closed":
-            return colorized(value, color: closedStatusColor)
-        case "merged":
-            return colorized(value, color: mergedStatusColor)
-        case "draft":
-            return colorized(value, color: metadataColor)
-        case "merge queue", "mergequeue", "queued":
-            return colorized(value, color: mergeQueueStatusColor)
-        default:
-            return value
-        }
+        TUIFormat.colorizedStatus(value)
     }
 
     func colorizedFileSummary(_ value: String) -> String {
@@ -345,11 +310,11 @@ final class TUIRenderer {
                 let text = String(token)
 
                 if isSignedNumber(text, prefix: "+") {
-                    return additionsColor + text + defaultForegroundColor
+                    return TUIFormat.colorized(text, color: TUIFormat.Color.additions)
                 }
 
                 if isSignedNumber(text, prefix: "-") {
-                    return deletionsColor + text + defaultForegroundColor
+                    return TUIFormat.colorized(text, color: TUIFormat.Color.deletions)
                 }
 
                 return text
@@ -366,19 +331,7 @@ final class TUIRenderer {
     }
 
     func truncate(_ value: String, to width: Int) -> String {
-        guard value.count > width else {
-            return value
-        }
-
-        guard width > 1 else {
-            return String(value.prefix(width))
-        }
-
-        guard width > 3 else {
-            return String(value.prefix(width))
-        }
-
-        return String(value.prefix(width - 3)) + "..."
+        TUIFormat.truncate(value, to: width)
     }
 
     func terminalHeight() -> Int {
@@ -425,69 +378,8 @@ final class TUIRenderer {
     }
 
     private func joinPaneLines(left: String, right: String, leftWidth: Int) -> String {
-        let clippedLeft = clipped(left, to: leftWidth)
-        return clippedLeft + String(repeating: " ", count: max(1, leftWidth - visibleLength(clippedLeft) + 1)) + right
-    }
-
-    private func clipped(_ value: String, to width: Int) -> String {
-        guard visibleLength(value) > width else {
-            return value
-        }
-
-        var output = ""
-        var visibleCount = 0
-        var index = value.startIndex
-
-        while index < value.endIndex && visibleCount < width {
-            let character = value[index]
-
-            if character == "\u{001B}" {
-                let sequenceStart = index
-                value.formIndex(after: &index)
-
-                while index < value.endIndex {
-                    let sequenceCharacter = value[index]
-                    value.formIndex(after: &index)
-
-                    if sequenceCharacter.isLetter {
-                        break
-                    }
-                }
-
-                output += value[sequenceStart..<index]
-                continue
-            }
-
-            output.append(character)
-            visibleCount += 1
-            value.formIndex(after: &index)
-        }
-
-        return output + "\u{001B}[0m"
-    }
-
-    private func visibleLength(_ value: String) -> Int {
-        var count = 0
-        var isEscapeSequence = false
-
-        for character in value {
-            if character == "\u{001B}" {
-                isEscapeSequence = true
-                continue
-            }
-
-            if isEscapeSequence {
-                if character.isLetter {
-                    isEscapeSequence = false
-                }
-
-                continue
-            }
-
-            count += 1
-        }
-
-        return count
+        let clippedLeft = TUIFormat.clipped(left, to: leftWidth)
+        return clippedLeft + String(repeating: " ", count: max(1, leftWidth - TUIFormat.visibleLength(clippedLeft) + 1)) + right
     }
 
     private func drawListLines(_ lines: [String]) {
