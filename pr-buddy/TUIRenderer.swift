@@ -49,15 +49,24 @@ final class TUIRenderer {
     ) {
         let rows = tableRows(for: pullRequests)
         let headers = headers(for: fileSortOrder)
-        let widths = columnWidths(headers: headers, rows: rows)
+        let terminalWidth = terminalWidth()
+        let attentionPaneWidth = rightPaneWidth(for: terminalWidth)
+        let leftPaneWidth = max(30, terminalWidth - attentionPaneWidth - 2)
+        let widths = columnWidths(
+            headers: headers,
+            rows: rows,
+            maximumWidths: mainPaneMaximumWidths(availableWidth: leftPaneWidth)
+        )
         let visibleRows = visibleListRows()
         let endIndex = min(rows.count, topIndex + visibleRows)
         let attentionRows = attentionTableRows(for: attentionPullRequests)
-        let attentionWidths = attentionColumnWidths(rows: attentionRows)
+        let attentionWidths = attentionColumnWidths(rows: attentionRows, availableWidth: attentionPaneWidth)
         let attentionEndIndex = min(attentionRows.count, attentionTopIndex + visibleRows)
         let repoText = options.repo ?? "current repository"
         let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
         let attentionShownRange = attentionRows.isEmpty ? "0 of 0" : "\(attentionTopIndex + 1)-\(attentionEndIndex) of \(attentionRows.count)"
+        let attentionHeader = attentionRows.isEmpty ? "" : attentionTitle(count: attentionRows.count)
+        let attentionColumnHeader = attentionRows.isEmpty ? "" : renderAttentionHeader(widths: attentionWidths)
 
         var lines = [
             "pr-buddy  \(repoText)",
@@ -66,13 +75,13 @@ final class TUIRenderer {
             "",
             joinPaneLines(
                 left: "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
-                right: attentionTitle(count: attentionRows.count),
-                leftWidth: mainPaneWidth(headers: headers, widths: widths)
+                right: attentionHeader,
+                leftWidth: leftPaneWidth
             ),
             joinPaneLines(
                 left: "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  "),
-                right: renderAttentionHeader(widths: attentionWidths),
-                leftWidth: mainPaneWidth(headers: headers, widths: widths)
+                right: attentionColumnHeader,
+                leftWidth: leftPaneWidth
             )
         ]
 
@@ -99,13 +108,15 @@ final class TUIRenderer {
                     widths: attentionWidths,
                     isSelected: isAttentionPaneSelected && attentionIndex == attentionSelectedIndex
                 )
-            } else if attentionRows.isEmpty && offset == 0 {
-                right = "  No PRs need attention."
+            } else if attentionRows.isEmpty && offset == centeredRowIndex(in: visibleRows) {
+                right = centeredText("No Open PRs", width: attentionPaneWidth)
+            } else if attentionRows.isEmpty && offset == centeredRowIndex(in: visibleRows) + 1 {
+                right = centeredText("that involve you today", width: attentionPaneWidth)
             } else {
                 right = ""
             }
 
-            lines.append(joinPaneLines(left: left, right: right, leftWidth: mainPaneWidth(headers: headers, widths: widths)))
+            lines.append(joinPaneLines(left: left, right: right, leftWidth: leftPaneWidth))
         }
 
         drawListLines(lines)
@@ -176,6 +187,10 @@ final class TUIRenderer {
     }
 
     func columnWidths(headers: [String], rows: [[String]]) -> [Int] {
+        columnWidths(headers: headers, rows: rows, maximumWidths: maximumWidths)
+    }
+
+    private func columnWidths(headers: [String], rows: [[String]], maximumWidths: [Int]) -> [Int] {
         headers.indices.map { column in
             let contentWidth = ([headers[column]] + rows.map { $0[column] })
                 .map(\.count)
@@ -186,13 +201,17 @@ final class TUIRenderer {
     }
 
     func attentionColumnWidths(rows: [[String]]) -> [Int] {
+        attentionColumnWidths(rows: rows, availableWidth: max(36, terminalWidth() / 3))
+    }
+
+    private func attentionColumnWidths(rows: [[String]], availableWidth: Int) -> [Int] {
         let headers = ["Title", "Status"]
         return headers.indices.map { column in
             let contentWidth = ([headers[column]] + rows.map { $0[column] })
                 .map(\.count)
                 .max() ?? headers[column].count
 
-            let maximumWidth = column == 0 ? max(16, terminalWidth() / 4) : 8
+            let maximumWidth = column == 0 ? max(16, availableWidth - 10) : 8
             return min(maximumWidth, max(headers[column].count, contentWidth))
         }
     }
@@ -372,15 +391,84 @@ final class TUIRenderer {
         "My PRs (\(count))"
     }
 
-    private func mainPaneWidth(headers: [String], widths: [Int]) -> Int {
-        let contentWidth = widths.reduce(0, +) + ((widths.count - 1) * 2) + 2
-        let maxWidth = max(40, terminalWidth() - 44)
+    private func rightPaneWidth(for terminalWidth: Int) -> Int {
+        min(max(36, terminalWidth / 3), max(36, terminalWidth - 34))
+    }
 
-        return min(contentWidth, maxWidth)
+    private func mainPaneMaximumWidths(availableWidth: Int) -> [Int] {
+        var widths = [6, 9, 8, 12, 12, 24, 12]
+        let minimumWidths = [3, 5, 4, 6, 6, 5, 6]
+        let separatorWidth = (widths.count - 1) * 2 + 2
+        var overflow = widths.reduce(0, +) + separatorWidth - availableWidth
+
+        for column in [5, 4, 6, 3, 1, 2, 0] where overflow > 0 {
+            let shrinkAmount = min(overflow, widths[column] - minimumWidths[column])
+            widths[column] -= shrinkAmount
+            overflow -= shrinkAmount
+        }
+
+        if overflow < 0 {
+            widths[5] += min(maximumWidths[5] - widths[5], abs(overflow))
+        }
+
+        return widths
+    }
+
+    private func centeredRowIndex(in visibleRows: Int) -> Int {
+        max(0, visibleRows / 2)
+    }
+
+    private func centeredText(_ text: String, width: Int) -> String {
+        let visibleTextLength = visibleLength(text)
+
+        guard width > visibleTextLength else {
+            return text
+        }
+
+        let leadingPadding = (width - visibleTextLength) / 2
+        return String(repeating: " ", count: leadingPadding) + text
     }
 
     private func joinPaneLines(left: String, right: String, leftWidth: Int) -> String {
-        left + String(repeating: " ", count: max(2, leftWidth - visibleLength(left) + 4)) + right
+        let clippedLeft = clipped(left, to: leftWidth)
+        return clippedLeft + String(repeating: " ", count: max(1, leftWidth - visibleLength(clippedLeft) + 1)) + right
+    }
+
+    private func clipped(_ value: String, to width: Int) -> String {
+        guard visibleLength(value) > width else {
+            return value
+        }
+
+        var output = ""
+        var visibleCount = 0
+        var index = value.startIndex
+
+        while index < value.endIndex && visibleCount < width {
+            let character = value[index]
+
+            if character == "\u{001B}" {
+                let sequenceStart = index
+                value.formIndex(after: &index)
+
+                while index < value.endIndex {
+                    let sequenceCharacter = value[index]
+                    value.formIndex(after: &index)
+
+                    if sequenceCharacter.isLetter {
+                        break
+                    }
+                }
+
+                output += value[sequenceStart..<index]
+                continue
+            }
+
+            output.append(character)
+            visibleCount += 1
+            value.formIndex(after: &index)
+        }
+
+        return output + "\u{001B}[0m"
     }
 
     private func visibleLength(_ value: String) -> Int {
