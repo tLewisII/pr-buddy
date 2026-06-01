@@ -1,0 +1,8 @@
+pr-buddy  owner/project
+Main 1-2 of 2.  My PRs 1-2 of 2.  arrows/h/j/k/l move  enter/v view  c checkout  o open  r refresh  q quit
+
+
+  PR    Files     Status  Review    Labels  Title  Author      My PRs (2)
+  ----  --------  ------  --------  ------  -----  ------      Title                  Status
+  #101  3 +12 -4  open    revie...  ui      Re...  terry         Update release notes   draft
+  #102  3 +12 -4  merged  revie...  cli     Fi...  terry       > Tighten parser errors  open

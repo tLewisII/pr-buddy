@@ -71,15 +71,85 @@ final class TUIRenderer {
         options: Options,
         message: String
     ) {
+        let lines = renderPullRequestListLines(
+            pullRequests: pullRequests,
+            selectedIndex: selectedIndex,
+            topIndex: topIndex,
+            isFilesHeaderSelected: isFilesHeaderSelected,
+            isMainPaneSelected: isMainPaneSelected,
+            fileSortOrder: fileSortOrder,
+            attentionPullRequests: attentionPullRequests,
+            attentionSelectedIndex: attentionSelectedIndex,
+            attentionTopIndex: attentionTopIndex,
+            isAttentionPaneSelected: isAttentionPaneSelected,
+            options: options,
+            message: message,
+            terminalWidth: terminalWidth(),
+            terminalHeight: terminalHeight()
+        )
+
+        drawListLines(lines)
+    }
+
+    func renderPullRequestList(
+        pullRequests: [PullRequest],
+        selectedIndex: Int,
+        topIndex: Int,
+        isFilesHeaderSelected: Bool,
+        isMainPaneSelected: Bool,
+        fileSortOrder: FileSortOrder,
+        attentionPullRequests: [PullRequest],
+        attentionSelectedIndex: Int,
+        attentionTopIndex: Int,
+        isAttentionPaneSelected: Bool,
+        options: Options,
+        message: String,
+        terminalWidth: Int = 120,
+        terminalHeight: Int = 24
+    ) -> String {
+        renderPullRequestListLines(
+            pullRequests: pullRequests,
+            selectedIndex: selectedIndex,
+            topIndex: topIndex,
+            isFilesHeaderSelected: isFilesHeaderSelected,
+            isMainPaneSelected: isMainPaneSelected,
+            fileSortOrder: fileSortOrder,
+            attentionPullRequests: attentionPullRequests,
+            attentionSelectedIndex: attentionSelectedIndex,
+            attentionTopIndex: attentionTopIndex,
+            isAttentionPaneSelected: isAttentionPaneSelected,
+            options: options,
+            message: message,
+            terminalWidth: terminalWidth,
+            terminalHeight: terminalHeight
+        ).joined(separator: "\n")
+    }
+
+    private func renderPullRequestListLines(
+        pullRequests: [PullRequest],
+        selectedIndex: Int,
+        topIndex: Int,
+        isFilesHeaderSelected: Bool,
+        isMainPaneSelected: Bool,
+        fileSortOrder: FileSortOrder,
+        attentionPullRequests: [PullRequest],
+        attentionSelectedIndex: Int,
+        attentionTopIndex: Int,
+        isAttentionPaneSelected: Bool,
+        options: Options,
+        message: String,
+        terminalWidth: Int,
+        terminalHeight: Int
+    ) -> [String] {
         let rows = tableRows(for: pullRequests)
         let headers = headers(for: fileSortOrder)
-        let visibleRows = visibleListRows()
+        let visibleRows = visibleListRows(terminalHeight: terminalHeight)
         let endIndex = min(rows.count, topIndex + visibleRows)
         let repoText = options.repo ?? "current repository"
         let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
 
         guard options.showMyPRs else {
-            drawSinglePanePullRequestList(
+            return singlePanePullRequestListLines(
                 rows: rows,
                 headers: headers,
                 selectedIndex: selectedIndex,
@@ -90,10 +160,8 @@ final class TUIRenderer {
                 shownRange: shownRange,
                 message: message
             )
-            return
         }
 
-        let terminalWidth = terminalWidth()
         let attentionPaneWidth = rightPaneRenderer.paneWidth(for: terminalWidth)
         let leftPaneWidth = max(30, terminalWidth - attentionPaneWidth - 2)
         let widths = columnWidths(
@@ -155,10 +223,10 @@ final class TUIRenderer {
             lines.append(joinPaneLines(left: left, right: right, leftWidth: leftPaneWidth))
         }
 
-        drawListLines(lines)
+        return lines
     }
 
-    private func drawSinglePanePullRequestList(
+    private func singlePanePullRequestListLines(
         rows: [[String]],
         headers: [String],
         selectedIndex: Int,
@@ -168,7 +236,7 @@ final class TUIRenderer {
         repoText: String,
         shownRange: String,
         message: String
-    ) {
+    ) -> [String] {
         let widths = columnWidths(headers: headers, rows: rows)
 
         var lines = [
@@ -182,8 +250,7 @@ final class TUIRenderer {
 
         if rows.isEmpty {
             lines.append("  No pull requests matched the current filters.")
-            drawListLines(lines)
-            return
+            return lines
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
@@ -198,7 +265,7 @@ final class TUIRenderer {
             }
         }
 
-        drawListLines(lines)
+        return lines
     }
 
     func drawCommandResult(title: String, result: CommandResult) {
@@ -386,7 +453,11 @@ final class TUIRenderer {
     }
 
     func visibleListRows() -> Int {
-        max(1, terminalHeight() - 8)
+        visibleListRows(terminalHeight: terminalHeight())
+    }
+
+    private func visibleListRows(terminalHeight: Int) -> Int {
+        max(1, terminalHeight - 8)
     }
 
     private func mainPaneMaximumWidths(availableWidth: Int) -> [Int] {

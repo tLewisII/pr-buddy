@@ -454,6 +454,114 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(renderer.colorizedStatus("merge_queue"), "\u{001B}[38;2;183;137;46mmerge_queue\u{001B}[39m")
     }
 
+    func testSinglePanePullRequestListMatchesSnapshot() throws {
+        var options = Options()
+        options.repo = "owner/project"
+
+        let rendered = TUIRenderer().renderPullRequestList(
+            pullRequests: [
+                makePullRequest(),
+                makePullRequest(
+                    number: 7,
+                    title: "Ship snapshot renderer that truncates long titles",
+                    author: PullRequest.Author(login: "alexandria"),
+                    state: "OPEN",
+                    isDraft: true,
+                    reviewDecision: "APPROVED",
+                    changedFiles: 12,
+                    additions: 1200,
+                    deletions: 50,
+                    labels: ["bug", "needs review"],
+                    reviews: 3
+                )
+            ],
+            selectedIndex: 1,
+            topIndex: 0,
+            isFilesHeaderSelected: false,
+            isMainPaneSelected: true,
+            fileSortOrder: .descending,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionPaneSelected: false,
+            options: options,
+            message: "Sorted by most files first.",
+            terminalWidth: 100,
+            terminalHeight: 14
+        )
+
+        try assertSnapshot(rendered, named: "single-pane-pr-list.txt")
+    }
+
+    func testDualPanePullRequestListMatchesSnapshot() throws {
+        var options = Options()
+        options.repo = "owner/project"
+        options.showMyPRs = true
+
+        let rendered = TUIRenderer().renderPullRequestList(
+            pullRequests: [
+                makePullRequest(number: 101, title: "Review dashboard keyboard navigation", labels: ["ui"]),
+                makePullRequest(number: 102, title: "Fix stale checkout command", state: "MERGED", labels: ["cli"])
+            ],
+            selectedIndex: 0,
+            topIndex: 0,
+            isFilesHeaderSelected: false,
+            isMainPaneSelected: false,
+            fileSortOrder: .none,
+            attentionPullRequests: [
+                makePullRequest(number: 201, title: "Update release notes", isDraft: true),
+                makePullRequest(number: 202, title: "Tighten parser errors", reviewDecision: "APPROVED")
+            ],
+            attentionSelectedIndex: 1,
+            attentionTopIndex: 0,
+            isAttentionPaneSelected: true,
+            options: options,
+            message: "",
+            terminalWidth: 100,
+            terminalHeight: 14
+        )
+
+        try assertSnapshot(rendered, named: "dual-pane-pr-list.txt")
+    }
+
+    private func assertSnapshot(
+        _ actual: String,
+        named name: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let snapshotsURL = try snapshotURL(named: name)
+        let expected = try String(contentsOf: snapshotsURL, encoding: .utf8)
+
+        XCTAssertEqual(normalizedSnapshot(actual), normalizedSnapshot(expected), file: file, line: line)
+    }
+
+    private func snapshotURL(named name: String) throws -> URL {
+#if SWIFT_PACKAGE
+        let bundle = Bundle.module
+#else
+        let bundle = Bundle(for: PRBuddyTests.self)
+#endif
+        let url = bundle.url(forResource: name, withExtension: nil, subdirectory: "__Snapshots__")
+            ?? bundle.url(forResource: name, withExtension: nil)
+
+        guard let url else {
+            throw SnapshotError.missingSnapshot(name)
+        }
+
+        return url
+    }
+
+    private func normalizedSnapshot(_ snapshot: String) -> String {
+        snapshot
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .strippingANSIEscapeSequences()
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { String($0).trimmingTrailingWhitespace() }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .newlines)
+    }
+
     private func makePullRequest(
         number: Int = 42,
         title: String = "Fix checkout flow",
@@ -488,5 +596,55 @@ final class PRBuddyTests: XCTestCase {
             updatedAt: updatedAt,
             url: url
         )
+    }
+}
+
+private enum SnapshotError: Error, CustomStringConvertible {
+    case missingSnapshot(String)
+
+    var description: String {
+        switch self {
+        case .missingSnapshot(let name):
+            return "Missing snapshot fixture: \(name)"
+        }
+    }
+}
+
+private extension String {
+    func trimmingTrailingWhitespace() -> String {
+        var output = self
+
+        while let last = output.last, last == " " || last == "\t" {
+            output.removeLast()
+        }
+
+        return output
+    }
+
+    func strippingANSIEscapeSequences() -> String {
+        var output = ""
+        var index = startIndex
+
+        while index < endIndex {
+            if self[index] == "\u{001B}" {
+                formIndex(after: &index)
+
+                while index < endIndex {
+                    let character = self[index]
+                    formIndex(after: &index)
+
+                    if character.isLetter {
+                        break
+                    }
+                }
+
+                continue
+            }
+
+            output.append(self[index])
+            formIndex(after: &index)
+        }
+
+        return output
     }
 }

@@ -34,7 +34,10 @@ let package = Package(
         .testTarget(
             name: "pr-buddyTests",
             dependencies: ["pr-buddy"],
-            path: "pr-buddyTests"
+            path: "pr-buddyTests",
+            resources: [
+                .copy("__Snapshots__")
+            ]
         )
     ]
 )

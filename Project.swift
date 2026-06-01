@@ -87,7 +87,8 @@ let project = Project(
             bundleId: "com.terrylewis.pr-buddyTests",
             deploymentTargets: .macOS(macOSDeploymentTarget),
             infoPlist: .default,
-            sources: ["pr-buddyTests/**"],
+            sources: ["pr-buddyTests/**/*.swift"],
+            resources: ["pr-buddyTests/__Snapshots__/**"],
             dependencies: [
                 .target(name: "pr-buddy"),
             ],
