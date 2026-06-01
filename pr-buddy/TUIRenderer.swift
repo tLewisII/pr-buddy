@@ -38,43 +38,74 @@ final class TUIRenderer {
         selectedIndex: Int,
         topIndex: Int,
         isFilesHeaderSelected: Bool,
+        isMainPaneSelected: Bool,
         fileSortOrder: FileSortOrder,
+        attentionPullRequests: [PullRequest],
+        attentionSelectedIndex: Int,
+        attentionTopIndex: Int,
+        isAttentionPaneSelected: Bool,
         options: Options,
         message: String
     ) {
         let rows = tableRows(for: pullRequests)
         let headers = headers(for: fileSortOrder)
         let widths = columnWidths(headers: headers, rows: rows)
-        let visibleRows = max(1, terminalHeight() - 8)
+        let visibleRows = visibleListRows()
         let endIndex = min(rows.count, topIndex + visibleRows)
+        let attentionRows = attentionTableRows(for: attentionPullRequests)
+        let attentionWidths = attentionColumnWidths(rows: attentionRows)
+        let attentionEndIndex = min(attentionRows.count, attentionTopIndex + visibleRows)
         let repoText = options.repo ?? "current repository"
         let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
+        let attentionShownRange = attentionRows.isEmpty ? "0 of 0" : "\(attentionTopIndex + 1)-\(attentionEndIndex) of \(attentionRows.count)"
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange).  arrows/j/k move  enter on Files sort  enter/v view  c checkout  o open  r refresh  q quit",
+            "Main \(shownRange).  My PRs \(attentionShownRange).  arrows/h/j/k/l move  enter/v view  c checkout  o open  r refresh  q quit",
             message.isEmpty ? " " : message,
             "",
-            "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
-            "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  ")
+            joinPaneLines(
+                left: "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
+                right: attentionTitle(count: attentionRows.count),
+                leftWidth: mainPaneWidth(headers: headers, widths: widths)
+            ),
+            joinPaneLines(
+                left: "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  "),
+                right: renderAttentionHeader(widths: attentionWidths),
+                leftWidth: mainPaneWidth(headers: headers, widths: widths)
+            )
         ]
 
-        if rows.isEmpty {
-            lines.append("  No pull requests matched the current filters.")
-            drawListLines(lines)
-            return
-        }
+        for offset in 0..<visibleRows {
+            let mainIndex = topIndex + offset
+            let attentionIndex = attentionTopIndex + offset
+            let left: String
+            let right: String
 
-        for index in topIndex..<endIndex {
-            let isSelectedRow = !isFilesHeaderSelected && index == selectedIndex
-            let marker = isSelectedRow ? ">" : " "
-            let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
-
-            if isSelectedRow {
-                lines.append("\u{001B}[7m\(rendered)\u{001B}[0m")
+            if mainIndex < rows.count {
+                let isSelectedRow = !isFilesHeaderSelected && isMainPaneSelected && mainIndex == selectedIndex
+                let marker = isSelectedRow ? ">" : " "
+                let rendered = "\(marker) " + renderRow(rows[mainIndex], widths: widths)
+                left = isSelectedRow ? "\u{001B}[7m\(rendered)\u{001B}[0m" : rendered
+            } else if rows.isEmpty && offset == 0 {
+                left = "  No pull requests matched the current filters."
             } else {
-                lines.append(rendered)
+                left = ""
             }
+
+            if attentionIndex < attentionRows.count {
+                right = renderAttentionRow(
+                    attentionRows[attentionIndex],
+                    widths: attentionWidths,
+                    isSelected: isAttentionPaneSelected && attentionIndex == attentionSelectedIndex
+                )
+            } else if attentionRows.isEmpty && offset == 0 {
+                right = "  No PRs need attention."
+            } else {
+                right = ""
+            }
+
+            lines.append(joinPaneLines(left: left, right: right, leftWidth: mainPaneWidth(headers: headers, widths: widths)))
         }
 
         drawListLines(lines)
@@ -117,6 +148,15 @@ final class TUIRenderer {
         }
     }
 
+    func attentionTableRows(for pullRequests: [PullRequest]) -> [[String]] {
+        pullRequests.map { pullRequest in
+            [
+                pullRequest.title,
+                pullRequest.statusSummary
+            ]
+        }
+    }
+
     func fileSummary(for pullRequest: PullRequest) -> String {
         guard let changedFiles = pullRequest.changedFiles else {
             return "-"
@@ -142,6 +182,18 @@ final class TUIRenderer {
                 .max() ?? headers[column].count
 
             return min(maximumWidths[column], max(headers[column].count, contentWidth))
+        }
+    }
+
+    func attentionColumnWidths(rows: [[String]]) -> [Int] {
+        let headers = ["Title", "Status"]
+        return headers.indices.map { column in
+            let contentWidth = ([headers[column]] + rows.map { $0[column] })
+                .map(\.count)
+                .max() ?? headers[column].count
+
+            let maximumWidth = column == 0 ? max(16, terminalWidth() / 4) : 8
+            return min(maximumWidth, max(headers[column].count, contentWidth))
         }
     }
 
@@ -191,6 +243,35 @@ final class TUIRenderer {
                 }
 
                 return "\u{001B}[7m\(paddedText)\u{001B}[0m"
+            }
+            .joined(separator: "  ")
+    }
+
+    func renderAttentionHeader(widths: [Int]) -> String {
+        renderAttentionCells(["Title", "Status"], widths: widths)
+    }
+
+    func renderAttentionRow(_ row: [String], widths: [Int], isSelected: Bool) -> String {
+        let rendered = "  " + renderAttentionCells(row, widths: widths)
+
+        guard isSelected else {
+            return rendered
+        }
+
+        return "\u{001B}[7m>\(rendered.dropFirst())\u{001B}[0m"
+    }
+
+    private func renderAttentionCells(_ row: [String], widths: [Int]) -> String {
+        row.enumerated()
+            .map { column, value in
+                let text = truncate(value, to: widths[column])
+                let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+
+                if column == 1 {
+                    return colorizedStatus(paddedText)
+                }
+
+                return paddedText
             }
             .joined(separator: "  ")
     }
@@ -271,6 +352,59 @@ final class TUIRenderer {
         }
 
         return Int(size.ws_row)
+    }
+
+    func terminalWidth() -> Int {
+        var size = winsize()
+
+        guard ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0, size.ws_col > 0 else {
+            return 120
+        }
+
+        return Int(size.ws_col)
+    }
+
+    func visibleListRows() -> Int {
+        max(1, terminalHeight() - 8)
+    }
+
+    private func attentionTitle(count: Int) -> String {
+        "My PRs (\(count))"
+    }
+
+    private func mainPaneWidth(headers: [String], widths: [Int]) -> Int {
+        let contentWidth = widths.reduce(0, +) + ((widths.count - 1) * 2) + 2
+        let maxWidth = max(40, terminalWidth() - 44)
+
+        return min(contentWidth, maxWidth)
+    }
+
+    private func joinPaneLines(left: String, right: String, leftWidth: Int) -> String {
+        left + String(repeating: " ", count: max(2, leftWidth - visibleLength(left) + 4)) + right
+    }
+
+    private func visibleLength(_ value: String) -> Int {
+        var count = 0
+        var isEscapeSequence = false
+
+        for character in value {
+            if character == "\u{001B}" {
+                isEscapeSequence = true
+                continue
+            }
+
+            if isEscapeSequence {
+                if character.isLetter {
+                    isEscapeSequence = false
+                }
+
+                continue
+            }
+
+            count += 1
+        }
+
+        return count
     }
 
     private func drawListLines(_ lines: [String]) {

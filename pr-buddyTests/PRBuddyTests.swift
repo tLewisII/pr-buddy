@@ -135,6 +135,29 @@ final class PRBuddyTests: XCTestCase {
         ])
     }
 
+    func testAttentionPullRequestListArgumentsUsesCurrentRepoAndMeSearchOnly() {
+        var options = Options()
+        options.repo = "owner/project"
+        options.search = "author:someone"
+        options.labels = ["bug"]
+        options.limit = 25
+
+        XCTAssertEqual(PRBuddy.attentionPullRequestListArguments(options: options), [
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "25",
+            "--json",
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,reviews,updatedAt,url",
+            "--repo",
+            "owner/project",
+            "--search",
+            "is:pr is:open involves:@me"
+        ])
+    }
+
     func testMatchesFiltersRequiresAllLabelsAndAcceptsMatchingStatus() {
         let pullRequest = makePullRequest(
             isDraft: true,
@@ -329,6 +352,18 @@ final class PRBuddyTests: XCTestCase {
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
         XCTAssertEqual(rows[0][1], "3 +120 -45")
+    }
+
+    func testAttentionTableRowsShowOnlyStatusAndTitle() {
+        let pullRequest = makePullRequest(
+            title: "Review the right pane",
+            state: "OPEN",
+            isDraft: false
+        )
+
+        let rows = TUIRenderer().attentionTableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows, [["Review the right pane", "open"]])
     }
 
     func testHeadersShowFileSortState() {

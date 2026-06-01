@@ -103,6 +103,12 @@ enum FileSortOrder: Equatable {
     }
 }
 
+private enum InteractiveFocus {
+    case filesHeader
+    case mainRow
+    case attentionRow
+}
+
 enum AppError: Error, CustomStringConvertible {
     case commandFailed(String)
     case decodingFailed(String)
@@ -125,13 +131,15 @@ struct PRBuddy {
         let pullRequests = try fetchPullRequests(arguments: arguments)
             .filter { matchesFilters($0, options: options) }
 
-        if pullRequests.isEmpty {
-            print("No pull requests matched the current filters.")
-            return
-        }
-
         if isatty(STDIN_FILENO) != 0 {
-            try runInteractiveTUI(initialPullRequests: pullRequests, options: options)
+            let attentionPullRequests = try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+            try runInteractiveTUI(
+                initialPullRequests: pullRequests,
+                initialAttentionPullRequests: attentionPullRequests,
+                options: options
+            )
+        } else if pullRequests.isEmpty {
+            print("No pull requests matched the current filters.")
         } else {
             TUIRenderer().printTable(pullRequests)
         }
@@ -313,6 +321,15 @@ extension PRBuddy {
         return baseArguments + repoArguments + searchArguments + labelArguments
     }
 
+    static func attentionPullRequestListArguments(options: Options) -> [String] {
+        var attentionOptions = Options()
+        attentionOptions.repo = options.repo
+        attentionOptions.search = "is:pr is:open involves:@me"
+        attentionOptions.limit = options.limit
+
+        return pullRequestListArguments(options: attentionOptions)
+    }
+
     private static func fetchPullRequests(arguments: [String]) throws -> [PullRequest] {
         let result = try runCommand("gh", arguments: arguments)
 
@@ -414,12 +431,11 @@ extension PRBuddy {
             .map(\.element)
     }
 
-    private static func runInteractiveTUI(initialPullRequests: [PullRequest], options: Options) throws {
-        enum Focus {
-            case filesHeader
-            case row
-        }
-
+    private static func runInteractiveTUI(
+        initialPullRequests: [PullRequest],
+        initialAttentionPullRequests: [PullRequest],
+        options: Options
+    ) throws {
         let terminalMode = try RawTerminalMode()
         let renderer = TUIRenderer()
         defer {
@@ -431,34 +447,41 @@ extension PRBuddy {
         var basePullRequests = initialPullRequests
         var fileSortOrder = FileSortOrder.none
         var pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
-        var focus = Focus.row
+        var attentionPullRequests = initialAttentionPullRequests
+        var focus = pullRequests.isEmpty && !attentionPullRequests.isEmpty ? InteractiveFocus.attentionRow : InteractiveFocus.mainRow
         var selectedIndex = 0
+        var attentionSelectedIndex = 0
         var topIndex = 0
-        var message = "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
+        var attentionTopIndex = 0
+        var message = fetchedMessage(pullRequests: pullRequests, attentionPullRequests: attentionPullRequests)
 
         renderer.hideCursor()
 
         while true {
-            if pullRequests.isEmpty {
-                selectedIndex = 0
-                topIndex = 0
-            } else {
-                selectedIndex = min(max(selectedIndex, 0), pullRequests.count - 1)
-                let visibleRows = max(1, renderer.terminalHeight() - 8)
-
-                if selectedIndex < topIndex {
-                    topIndex = selectedIndex
-                } else if selectedIndex >= topIndex + visibleRows {
-                    topIndex = selectedIndex - visibleRows + 1
-                }
-            }
+            keepSelectionVisible(
+                pullRequests: pullRequests,
+                selectedIndex: &selectedIndex,
+                topIndex: &topIndex,
+                visibleRows: renderer.visibleListRows()
+            )
+            keepSelectionVisible(
+                pullRequests: attentionPullRequests,
+                selectedIndex: &attentionSelectedIndex,
+                topIndex: &attentionTopIndex,
+                visibleRows: renderer.visibleListRows()
+            )
 
             renderer.drawPullRequestList(
                 pullRequests: pullRequests,
                 selectedIndex: selectedIndex,
                 topIndex: topIndex,
                 isFilesHeaderSelected: focus == .filesHeader,
+                isMainPaneSelected: focus == .mainRow,
                 fileSortOrder: fileSortOrder,
+                attentionPullRequests: attentionPullRequests,
+                attentionSelectedIndex: attentionSelectedIndex,
+                attentionTopIndex: attentionTopIndex,
+                isAttentionPaneSelected: focus == .attentionRow,
                 options: options,
                 message: message
             )
@@ -469,20 +492,39 @@ extension PRBuddy {
             case .up, .k:
                 if focus == .filesHeader {
                     message = ""
-                    continue
+                } else if focus == .attentionRow {
+                    attentionSelectedIndex = max(0, attentionSelectedIndex - 1)
+                    message = ""
                 } else if selectedIndex == 0 {
                     focus = .filesHeader
+                    message = ""
                 } else {
                     selectedIndex -= 1
+                    message = ""
                 }
-                message = ""
             case .down, .j:
                 if focus == .filesHeader {
                     if !pullRequests.isEmpty {
-                        focus = .row
+                        focus = .mainRow
                     }
+                } else if focus == .attentionRow {
+                    attentionSelectedIndex = min(max(0, attentionPullRequests.count - 1), attentionSelectedIndex + 1)
                 } else {
                     selectedIndex = min(max(0, pullRequests.count - 1), selectedIndex + 1)
+                }
+                message = ""
+            case .left, .h:
+                if focus == .attentionRow {
+                    if pullRequests.isEmpty {
+                        focus = .filesHeader
+                    } else {
+                        focus = .mainRow
+                    }
+                }
+                message = ""
+            case .right, .l:
+                if !attentionPullRequests.isEmpty {
+                    focus = .attentionRow
                 }
                 message = ""
             case .enter:
@@ -495,70 +537,97 @@ extension PRBuddy {
                     continue
                 }
 
-                guard !pullRequests.isEmpty else {
+                guard let selectedPullRequest = selectedPullRequest(
+                    focus: focus,
+                    pullRequests: pullRequests,
+                    selectedIndex: selectedIndex,
+                    attentionPullRequests: attentionPullRequests,
+                    attentionSelectedIndex: attentionSelectedIndex
+                ) else {
                     message = "No pull requests to view."
                     continue
                 }
 
                 renderer.drawCommandResult(
-                    title: "PR #\(pullRequests[selectedIndex].number)",
-                    result: try runPRCommand(["view", String(pullRequests[selectedIndex].number)], repo: options.repo)
+                    title: "PR #\(selectedPullRequest.number)",
+                    result: try runPRCommand(["view", String(selectedPullRequest.number)], repo: options.repo)
                 )
                 _ = readKey()
                 message = "Returned from details."
             case .v:
-                guard focus == .row else {
+                guard focus != .filesHeader else {
                     message = "Press enter on the Files header to change file-count sorting."
                     continue
                 }
 
-                guard !pullRequests.isEmpty else {
+                guard let selectedPullRequest = selectedPullRequest(
+                    focus: focus,
+                    pullRequests: pullRequests,
+                    selectedIndex: selectedIndex,
+                    attentionPullRequests: attentionPullRequests,
+                    attentionSelectedIndex: attentionSelectedIndex
+                ) else {
                     message = "No pull requests to view."
                     continue
                 }
 
                 renderer.drawCommandResult(
-                    title: "PR #\(pullRequests[selectedIndex].number)",
-                    result: try runPRCommand(["view", String(pullRequests[selectedIndex].number)], repo: options.repo)
+                    title: "PR #\(selectedPullRequest.number)",
+                    result: try runPRCommand(["view", String(selectedPullRequest.number)], repo: options.repo)
                 )
                 _ = readKey()
                 message = "Returned from details."
             case .c:
-                guard focus == .row else {
+                guard focus != .filesHeader else {
                     message = "Move to a pull request before checking out."
                     continue
                 }
 
-                guard !pullRequests.isEmpty else {
+                guard let selectedPullRequest = selectedPullRequest(
+                    focus: focus,
+                    pullRequests: pullRequests,
+                    selectedIndex: selectedIndex,
+                    attentionPullRequests: attentionPullRequests,
+                    attentionSelectedIndex: attentionSelectedIndex
+                ) else {
                     message = "No pull requests to checkout."
                     continue
                 }
 
                 renderer.drawCommandResult(
-                    title: "Checkout #\(pullRequests[selectedIndex].number)",
-                    result: try runPRCommand(["checkout", String(pullRequests[selectedIndex].number)], repo: options.repo)
+                    title: "Checkout #\(selectedPullRequest.number)",
+                    result: try runPRCommand(["checkout", String(selectedPullRequest.number)], repo: options.repo)
                 )
                 _ = readKey()
                 message = "Checkout command finished."
             case .o:
-                guard focus == .row else {
+                guard focus != .filesHeader else {
                     message = "Move to a pull request before opening it."
                     continue
                 }
 
-                guard !pullRequests.isEmpty else {
+                guard let selectedPullRequest = selectedPullRequest(
+                    focus: focus,
+                    pullRequests: pullRequests,
+                    selectedIndex: selectedIndex,
+                    attentionPullRequests: attentionPullRequests,
+                    attentionSelectedIndex: attentionSelectedIndex
+                ) else {
                     message = "No pull requests to open."
                     continue
                 }
 
-                let result = try runPRCommand(["view", String(pullRequests[selectedIndex].number), "--web"], repo: options.repo)
-                message = result.exitCode == 0 ? "Opened #\(pullRequests[selectedIndex].number) in browser." : result.stderr
+                let result = try runPRCommand(["view", String(selectedPullRequest.number), "--web"], repo: options.repo)
+                message = result.exitCode == 0 ? "Opened #\(selectedPullRequest.number) in browser." : result.stderr
             case .r:
                 let arguments = pullRequestListArguments(options: options)
                 let selectedPRNumber = pullRequests.indices.contains(selectedIndex) ? pullRequests[selectedIndex].number : nil
+                let selectedAttentionPRNumber = attentionPullRequests.indices.contains(attentionSelectedIndex) ? attentionPullRequests[attentionSelectedIndex].number : nil
+
                 basePullRequests = try fetchPullRequests(arguments: arguments)
                     .filter { matchesFilters($0, options: options) }
                 pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
+                attentionPullRequests = try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
 
                 if let selectedPRNumber,
                    let updatedIndex = pullRequests.firstIndex(where: { $0.number == selectedPRNumber }) {
@@ -567,17 +636,75 @@ extension PRBuddy {
                     selectedIndex = min(selectedIndex, max(0, pullRequests.count - 1))
                 }
 
-                if pullRequests.isEmpty {
+                if let selectedAttentionPRNumber,
+                   let updatedAttentionIndex = attentionPullRequests.firstIndex(where: { $0.number == selectedAttentionPRNumber }) {
+                    attentionSelectedIndex = updatedAttentionIndex
+                } else {
+                    attentionSelectedIndex = min(attentionSelectedIndex, max(0, attentionPullRequests.count - 1))
+                }
+
+                if focus == .mainRow && pullRequests.isEmpty && !attentionPullRequests.isEmpty {
+                    focus = .attentionRow
+                } else if focus == .attentionRow && attentionPullRequests.isEmpty && !pullRequests.isEmpty {
+                    focus = .mainRow
+                } else if pullRequests.isEmpty && attentionPullRequests.isEmpty {
                     focus = .filesHeader
                 }
 
-                message = "Refreshed \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")."
+                message = fetchedMessage(pullRequests: pullRequests, attentionPullRequests: attentionPullRequests)
             case .q:
                 return
             case .unknown:
-                message = "Use arrows/j/k to move, enter on Files to sort, enter/v to view, c checkout, o open, r refresh, q quit."
+                message = "Use arrows/h/j/k/l to move panes and rows, enter/v view, c checkout, o open, r refresh, q quit."
             }
         }
+    }
+
+    private static func keepSelectionVisible(
+        pullRequests: [PullRequest],
+        selectedIndex: inout Int,
+        topIndex: inout Int,
+        visibleRows: Int
+    ) {
+        if pullRequests.isEmpty {
+            selectedIndex = 0
+            topIndex = 0
+            return
+        }
+
+        selectedIndex = min(max(selectedIndex, 0), pullRequests.count - 1)
+
+        if selectedIndex < topIndex {
+            topIndex = selectedIndex
+        } else if selectedIndex >= topIndex + visibleRows {
+            topIndex = selectedIndex - visibleRows + 1
+        }
+    }
+
+    private static func selectedPullRequest(
+        focus: InteractiveFocus,
+        pullRequests: [PullRequest],
+        selectedIndex: Int,
+        attentionPullRequests: [PullRequest],
+        attentionSelectedIndex: Int
+    ) -> PullRequest? {
+        if focus == .attentionRow {
+            guard attentionPullRequests.indices.contains(attentionSelectedIndex) else {
+                return nil
+            }
+
+            return attentionPullRequests[attentionSelectedIndex]
+        }
+
+        guard pullRequests.indices.contains(selectedIndex) else {
+            return nil
+        }
+
+        return pullRequests[selectedIndex]
+    }
+
+    private static func fetchedMessage(pullRequests: [PullRequest], attentionPullRequests: [PullRequest]) -> String {
+        "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s") and \(attentionPullRequests.count) attention item\(attentionPullRequests.count == 1 ? "" : "s")."
     }
 
     private static func runPRCommand(_ arguments: [String], repo: String?) throws -> CommandResult {
@@ -626,9 +753,13 @@ public enum PRBuddyApp {
 enum InputKey {
     case up
     case down
+    case left
+    case right
     case enter
+    case h
     case j
     case k
+    case l
     case v
     case c
     case o
@@ -683,15 +814,23 @@ func readKey() -> InputKey {
             return .up
         } else if sequence == [91, 66] {
             return .down
+        } else if sequence == [91, 67] {
+            return .right
+        } else if sequence == [91, 68] {
+            return .left
         } else {
             return .unknown
         }
     case 99, 67:
         return .c
+    case 104, 72:
+        return .h
     case 106, 74:
         return .j
     case 107, 75:
         return .k
+    case 108, 76:
+        return .l
     case 111, 79:
         return .o
     case 113, 81:
