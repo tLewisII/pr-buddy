@@ -49,6 +49,26 @@ final class TUIRenderer {
     ) {
         let rows = tableRows(for: pullRequests)
         let headers = headers(for: fileSortOrder)
+        let visibleRows = visibleListRows()
+        let endIndex = min(rows.count, topIndex + visibleRows)
+        let repoText = options.repo ?? "current repository"
+        let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
+
+        guard options.showMyPRs else {
+            drawSinglePanePullRequestList(
+                rows: rows,
+                headers: headers,
+                selectedIndex: selectedIndex,
+                topIndex: topIndex,
+                visibleRows: visibleRows,
+                isFilesHeaderSelected: isFilesHeaderSelected,
+                repoText: repoText,
+                shownRange: shownRange,
+                message: message
+            )
+            return
+        }
+
         let terminalWidth = terminalWidth()
         let attentionPaneWidth = rightPaneWidth(for: terminalWidth)
         let leftPaneWidth = max(30, terminalWidth - attentionPaneWidth - 2)
@@ -57,13 +77,9 @@ final class TUIRenderer {
             rows: rows,
             maximumWidths: mainPaneMaximumWidths(availableWidth: leftPaneWidth)
         )
-        let visibleRows = visibleListRows()
-        let endIndex = min(rows.count, topIndex + visibleRows)
         let attentionRows = attentionTableRows(for: attentionPullRequests)
         let attentionWidths = attentionColumnWidths(rows: attentionRows, availableWidth: attentionPaneWidth)
         let attentionEndIndex = min(attentionRows.count, attentionTopIndex + visibleRows)
-        let repoText = options.repo ?? "current repository"
-        let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
         let attentionShownRange = attentionRows.isEmpty ? "0 of 0" : "\(attentionTopIndex + 1)-\(attentionEndIndex) of \(attentionRows.count)"
         let attentionHeader = attentionRows.isEmpty ? "" : attentionTitle(count: attentionRows.count)
         let attentionColumnHeader = attentionRows.isEmpty ? "" : renderAttentionHeader(widths: attentionWidths)
@@ -117,6 +133,49 @@ final class TUIRenderer {
             }
 
             lines.append(joinPaneLines(left: left, right: right, leftWidth: leftPaneWidth))
+        }
+
+        drawListLines(lines)
+    }
+
+    private func drawSinglePanePullRequestList(
+        rows: [[String]],
+        headers: [String],
+        selectedIndex: Int,
+        topIndex: Int,
+        visibleRows: Int,
+        isFilesHeaderSelected: Bool,
+        repoText: String,
+        shownRange: String,
+        message: String
+    ) {
+        let widths = columnWidths(headers: headers, rows: rows)
+
+        var lines = [
+            "pr-buddy  \(repoText)",
+            "Showing \(shownRange).  arrows/j/k move  enter on Files sort  enter/v view  c checkout  o open  r refresh  q quit",
+            message.isEmpty ? " " : message,
+            "",
+            "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
+            "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  ")
+        ]
+
+        if rows.isEmpty {
+            lines.append("  No pull requests matched the current filters.")
+            drawListLines(lines)
+            return
+        }
+
+        for index in topIndex..<min(rows.count, topIndex + visibleRows) {
+            let isSelectedRow = !isFilesHeaderSelected && index == selectedIndex
+            let marker = isSelectedRow ? ">" : " "
+            let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
+
+            if isSelectedRow {
+                lines.append("\u{001B}[7m\(rendered)\u{001B}[0m")
+            } else {
+                lines.append(rendered)
+            }
         }
 
         drawListLines(lines)

@@ -19,6 +19,7 @@ struct Options {
     var minReviews: Int?
     var maxReviews: Int?
     var limit = 50
+    var showMyPRs = false
 }
 
 struct PullRequest: Decodable {
@@ -132,7 +133,9 @@ struct PRBuddy {
             .filter { matchesFilters($0, options: options) }
 
         if isatty(STDIN_FILENO) != 0 {
-            let attentionPullRequests = try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+            let attentionPullRequests = options.showMyPRs
+                ? try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+                : []
             try runInteractiveTUI(
                 initialPullRequests: pullRequests,
                 initialAttentionPullRequests: attentionPullRequests,
@@ -162,6 +165,7 @@ private struct PRBuddyCommand: ParsableCommand {
           o              Open selected PR in the browser.
           r              Refresh PRs.
           q              Quit.
+          --show-my-prs   Show a right pane with PRs that involve you.
         """
     )
 
@@ -192,6 +196,9 @@ private struct PRBuddyCommand: ParsableCommand {
     @Option(name: .customLong("limit"), help: "Maximum PRs to fetch before local filters.")
     var limit = 50
 
+    @Flag(name: .customLong("show-my-prs"), help: "Show a right pane with open PRs that involve you.")
+    var showMyPRs = false
+
     mutating func validate() throws {
         _ = try parsedOptions()
     }
@@ -209,6 +216,7 @@ private struct PRBuddyCommand: ParsableCommand {
         options.minChangedFiles = minChangedFiles
         options.maxChangedFiles = maxChangedFiles
         options.limit = limit
+        options.showMyPRs = showMyPRs
 
         if let changedFiles {
             try PRBuddy.parseChangedFilesRange(changedFiles, into: &options)
@@ -448,12 +456,16 @@ extension PRBuddy {
         var fileSortOrder = FileSortOrder.none
         var pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
         var attentionPullRequests = initialAttentionPullRequests
-        var focus = pullRequests.isEmpty && !attentionPullRequests.isEmpty ? InteractiveFocus.attentionRow : InteractiveFocus.mainRow
+        var focus = options.showMyPRs && pullRequests.isEmpty && !attentionPullRequests.isEmpty ? InteractiveFocus.attentionRow : InteractiveFocus.mainRow
         var selectedIndex = 0
         var attentionSelectedIndex = 0
         var topIndex = 0
         var attentionTopIndex = 0
-        var message = fetchedMessage(pullRequests: pullRequests, attentionPullRequests: attentionPullRequests)
+        var message = fetchedMessage(
+            pullRequests: pullRequests,
+            attentionPullRequests: attentionPullRequests,
+            showMyPRs: options.showMyPRs
+        )
 
         renderer.hideCursor()
 
@@ -464,12 +476,14 @@ extension PRBuddy {
                 topIndex: &topIndex,
                 visibleRows: renderer.visibleListRows()
             )
-            keepSelectionVisible(
-                pullRequests: attentionPullRequests,
-                selectedIndex: &attentionSelectedIndex,
-                topIndex: &attentionTopIndex,
-                visibleRows: renderer.visibleListRows()
-            )
+            if options.showMyPRs {
+                keepSelectionVisible(
+                    pullRequests: attentionPullRequests,
+                    selectedIndex: &attentionSelectedIndex,
+                    topIndex: &attentionTopIndex,
+                    visibleRows: renderer.visibleListRows()
+                )
+            }
 
             renderer.drawPullRequestList(
                 pullRequests: pullRequests,
@@ -514,7 +528,7 @@ extension PRBuddy {
                 }
                 message = ""
             case .left, .h:
-                if focus == .attentionRow {
+                if options.showMyPRs && focus == .attentionRow {
                     if pullRequests.isEmpty {
                         focus = .filesHeader
                     } else {
@@ -523,7 +537,7 @@ extension PRBuddy {
                 }
                 message = ""
             case .right, .l:
-                if !attentionPullRequests.isEmpty {
+                if options.showMyPRs && !attentionPullRequests.isEmpty {
                     focus = .attentionRow
                 }
                 message = ""
@@ -622,12 +636,14 @@ extension PRBuddy {
             case .r:
                 let arguments = pullRequestListArguments(options: options)
                 let selectedPRNumber = pullRequests.indices.contains(selectedIndex) ? pullRequests[selectedIndex].number : nil
-                let selectedAttentionPRNumber = attentionPullRequests.indices.contains(attentionSelectedIndex) ? attentionPullRequests[attentionSelectedIndex].number : nil
+                let selectedAttentionPRNumber = options.showMyPRs && attentionPullRequests.indices.contains(attentionSelectedIndex) ? attentionPullRequests[attentionSelectedIndex].number : nil
 
                 basePullRequests = try fetchPullRequests(arguments: arguments)
                     .filter { matchesFilters($0, options: options) }
                 pullRequests = sortedPullRequests(basePullRequests, fileSortOrder: fileSortOrder)
-                attentionPullRequests = try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+                attentionPullRequests = options.showMyPRs
+                    ? try fetchPullRequests(arguments: attentionPullRequestListArguments(options: options))
+                    : []
 
                 if let selectedPRNumber,
                    let updatedIndex = pullRequests.firstIndex(where: { $0.number == selectedPRNumber }) {
@@ -643,15 +659,19 @@ extension PRBuddy {
                     attentionSelectedIndex = min(attentionSelectedIndex, max(0, attentionPullRequests.count - 1))
                 }
 
-                if focus == .mainRow && pullRequests.isEmpty && !attentionPullRequests.isEmpty {
+                if options.showMyPRs && focus == .mainRow && pullRequests.isEmpty && !attentionPullRequests.isEmpty {
                     focus = .attentionRow
-                } else if focus == .attentionRow && attentionPullRequests.isEmpty && !pullRequests.isEmpty {
+                } else if options.showMyPRs && focus == .attentionRow && attentionPullRequests.isEmpty && !pullRequests.isEmpty {
                     focus = .mainRow
-                } else if pullRequests.isEmpty && attentionPullRequests.isEmpty {
+                } else if pullRequests.isEmpty && (!options.showMyPRs || attentionPullRequests.isEmpty) {
                     focus = .filesHeader
                 }
 
-                message = fetchedMessage(pullRequests: pullRequests, attentionPullRequests: attentionPullRequests)
+                message = fetchedMessage(
+                    pullRequests: pullRequests,
+                    attentionPullRequests: attentionPullRequests,
+                    showMyPRs: options.showMyPRs
+                )
             case .q:
                 return
             case .unknown:
@@ -703,8 +723,18 @@ extension PRBuddy {
         return pullRequests[selectedIndex]
     }
 
-    private static func fetchedMessage(pullRequests: [PullRequest], attentionPullRequests: [PullRequest]) -> String {
-        "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s") and \(attentionPullRequests.count) attention item\(attentionPullRequests.count == 1 ? "" : "s")."
+    private static func fetchedMessage(
+        pullRequests: [PullRequest],
+        attentionPullRequests: [PullRequest],
+        showMyPRs: Bool
+    ) -> String {
+        let pullRequestText = "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")"
+
+        guard showMyPRs else {
+            return pullRequestText + "."
+        }
+
+        return pullRequestText + " and \(attentionPullRequests.count) attention item\(attentionPullRequests.count == 1 ? "" : "s")."
     }
 
     private static func runPRCommand(_ arguments: [String], repo: String?) throws -> CommandResult {

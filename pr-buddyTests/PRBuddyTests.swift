@@ -10,7 +10,8 @@ final class PRBuddyTests: XCTestCase {
             "--status", "draft,approved",
             "--changed-files", "2..8",
             "--reviews", "1..3",
-            "--limit", "25"
+            "--limit", "25",
+            "--show-my-prs"
         ])
 
         XCTAssertEqual(options.repo, "owner/project")
@@ -22,6 +23,13 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(options.minReviews, 1)
         XCTAssertEqual(options.maxReviews, 3)
         XCTAssertEqual(options.limit, 25)
+        XCTAssertTrue(options.showMyPRs)
+    }
+
+    func testParseOptionsDoesNotShowMyPRsByDefault() throws {
+        let options = try PRBuddy.parseOptions([])
+
+        XCTAssertFalse(options.showMyPRs)
     }
 
     func testParseOptionsRejectsInvalidFileRange() {
