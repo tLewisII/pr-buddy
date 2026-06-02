@@ -387,7 +387,43 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "3 ✓ ✕ 🗨︎")
+        XCTAssertEqual(rows[0][3], "3 ✓ ✕ 🗨︎ 1")
+    }
+
+    func testTableRowsCollapsesMoreThanThreeApprovalIcons() {
+        let pullRequest = makePullRequest(
+            reviewDecision: nil,
+            reviews: nil,
+            reviewStates: ["APPROVED", "APPROVED", "APPROVED", "APPROVED"]
+        )
+
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][3], "4 ✓ 4")
+    }
+
+    func testTableRowsShowsUpToThreeApprovalIcons() {
+        let pullRequest = makePullRequest(
+            reviewDecision: nil,
+            reviews: nil,
+            reviewStates: ["APPROVED", "APPROVED", "APPROVED"]
+        )
+
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][3], "3 ✓ ✓ ✓")
+    }
+
+    func testTableRowsAlwaysCollapsesCommentIconsWithCount() {
+        let pullRequest = makePullRequest(
+            reviewDecision: nil,
+            reviews: nil,
+            reviewStates: ["COMMENTED", "COMMENTED", "COMMENTED"]
+        )
+
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][3], "3 🗨︎ 3")
     }
 
     func testTableRowsFormatsChangedFileStats() {

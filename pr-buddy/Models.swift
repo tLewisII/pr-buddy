@@ -117,16 +117,36 @@ struct PullRequest: Decodable {
         let reviewStates = reviews?.compactMap(\.state) ?? []
         let states = reviewStates.isEmpty ? fallbackReviewStates : reviewStates
 
-        return states.compactMap { state in
-            switch normalizedReviewState(state) {
+        var statusCounts: [(status: String, count: Int)] = []
+
+        for state in states {
+            let status = normalizedReviewState(state)
+
+            guard ["approved", "changes requested", "commented"].contains(status) else {
+                continue
+            }
+
+            if let index = statusCounts.firstIndex(where: { $0.status == status }) {
+                statusCounts[index].count += 1
+            } else {
+                statusCounts.append((status: status, count: 1))
+            }
+        }
+
+        return statusCounts.flatMap { status, count in
+            switch status {
             case "approved":
-                return "✓"
+                guard count > 3 else {
+                    return Array(repeating: "✓", count: count)
+                }
+
+                return ["✓", String(count)]
             case "changes requested":
-                return "✕"
+                return Array(repeating: "✕", count: count)
             case "commented":
-                return "🗨︎"
+                return ["🗨︎", String(count)]
             default:
-                return nil
+                return []
             }
         }
     }
