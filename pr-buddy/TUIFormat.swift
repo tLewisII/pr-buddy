@@ -42,10 +42,10 @@ enum TUIFormat {
     static func columnWidths(headers: [String], rows: [[String]], maximumWidths: [Int]) -> [Int] {
         headers.indices.map { column in
             let contentWidth = ([headers[column]] + rows.map { $0[column] })
-                .map(\.count)
-                .max() ?? headers[column].count
+                .map(visibleLength)
+                .max() ?? visibleLength(headers[column])
 
-            return min(maximumWidths[column], max(headers[column].count, contentWidth))
+            return min(maximumWidths[column], max(visibleLength(headers[column]), contentWidth))
         }
     }
 
@@ -79,19 +79,19 @@ enum TUIFormat {
     }
 
     static func truncate(_ value: String, to width: Int) -> String {
-        guard value.count > width else {
+        guard visibleLength(value) > width else {
             return value
         }
 
         guard width > 1 else {
-            return String(value.prefix(width))
+            return prefix(value, fitting: width)
         }
 
         guard width > 3 else {
-            return String(value.prefix(width))
+            return prefix(value, fitting: width)
         }
 
-        return String(value.prefix(width - 3)) + "..."
+        return prefix(value, fitting: width - 3) + "..."
     }
 
     static func clipped(_ value: String, to width: Int) -> String {
@@ -123,12 +123,28 @@ enum TUIFormat {
                 continue
             }
 
+            let characterWidth = displayWidth(of: character)
+
+            guard visibleCount + characterWidth <= width else {
+                break
+            }
+
             output.append(character)
-            visibleCount += 1
+            visibleCount += characterWidth
             value.formIndex(after: &index)
         }
 
         return output + Color.reset
+    }
+
+    static func padded(_ value: String, to width: Int) -> String {
+        let visibleValueLength = visibleLength(value)
+
+        guard visibleValueLength < width else {
+            return value
+        }
+
+        return value + String(repeating: " ", count: width - visibleValueLength)
     }
 
     static func centeredText(_ text: String, width: Int) -> String {
@@ -160,9 +176,69 @@ enum TUIFormat {
                 continue
             }
 
-            count += 1
+            count += displayWidth(of: character)
         }
 
         return count
+    }
+
+    private static func prefix(_ value: String, fitting width: Int) -> String {
+        var output = ""
+        var visibleCount = 0
+
+        for character in value {
+            let characterWidth = displayWidth(of: character)
+
+            guard visibleCount + characterWidth <= width else {
+                break
+            }
+
+            output.append(character)
+            visibleCount += characterWidth
+        }
+
+        return output
+    }
+
+    private static func displayWidth(of character: Character) -> Int {
+        if character.unicodeScalars.contains(where: { $0.value == 0xFE0E }) {
+            return 1
+        }
+
+        return character.unicodeScalars.map(displayWidth(of:)).max() ?? 0
+    }
+
+    private static func displayWidth(of scalar: Unicode.Scalar) -> Int {
+        if scalar.properties.generalCategory == .nonspacingMark
+            || scalar.properties.generalCategory == .enclosingMark
+            || scalar.value == 0xFE0E
+            || scalar.value == 0xFE0F {
+            return 0
+        }
+
+        if isWideScalar(scalar) {
+            return 2
+        }
+
+        return 1
+    }
+
+    private static func isWideScalar(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x1100...0x115F,
+             0x2329...0x232A,
+             0x2E80...0xA4CF,
+             0xAC00...0xD7A3,
+             0xF900...0xFAFF,
+             0xFE10...0xFE19,
+             0xFE30...0xFE6F,
+             0xFF00...0xFF60,
+             0xFFE0...0xFFE6,
+             0x1F000...0x1FAFF,
+             0x20000...0x3FFFD:
+            return true
+        default:
+            return false
+        }
     }
 }

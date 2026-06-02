@@ -343,7 +343,7 @@ final class TUIRenderer {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
-                let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+                let paddedText = TUIFormat.padded(text, to: widths[column])
 
                 switch TableColumn(index: column) {
                 case .number, .author:
@@ -380,7 +380,7 @@ final class TUIRenderer {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
-                let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+                let paddedText = TUIFormat.padded(text, to: widths[column])
 
                 guard column == 1, isFilesHeaderSelected else {
                     return paddedText
@@ -410,7 +410,7 @@ final class TUIRenderer {
                 return TUIFormat.colorized(String(character), color: TUIFormat.Color.openStatus)
             case "✕":
                 return TUIFormat.colorized(String(character), color: TUIFormat.Color.closedStatus)
-            case "🗨":
+            case "🗨", "🗨︎":
                 return TUIFormat.colorized(String(character), color: TUIFormat.Color.metadata)
             default:
                 return String(character)

@@ -124,7 +124,7 @@ struct PullRequest: Decodable {
             case "changes requested":
                 return "✕"
             case "commented":
-                return "🗨"
+                return "🗨︎"
             default:
                 return nil
             }

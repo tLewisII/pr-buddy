@@ -85,7 +85,7 @@ final class TUIRightPaneRenderer {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
-                let paddedText = text.padding(toLength: widths[column], withPad: " ", startingAt: 0)
+                let paddedText = TUIFormat.padded(text, to: widths[column])
 
                 if column == 1 {
                     return TUIFormat.colorizedStatus(paddedText)
