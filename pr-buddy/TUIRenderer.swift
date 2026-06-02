@@ -41,8 +41,8 @@ final class TUIRenderer {
     }
 
     private let rightPaneRenderer = TUIRightPaneRenderer()
-    private let headers = ["Updated", "Files", "Status", "Review", "Labels", "Title", "Author"]
-    private let maximumWidths = [7, 18, 8, 18, 24, 72, 24]
+    private let headers = ["Updated  ", "Files", "Status", "Review", "Labels", "Title", "Author"]
+    private let maximumWidths = [9, 18, 8, 18, 24, 72, 24]
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
     private let updatedComponentsFormatter = DateComponentsFormatter()
@@ -433,7 +433,7 @@ final class TUIRenderer {
 
         switch updatedSortOrder {
         case .none:
-            headers[0] = "Updated"
+            headers[0] = "Updated  "
         case .ascending:
             headers[0] = "Updated ^"
         case .descending:
@@ -564,8 +564,8 @@ final class TUIRenderer {
     }
 
     private func mainPaneMaximumWidths(availableWidth: Int) -> [Int] {
-        var widths = [7, 9, 8, 12, 12, 24, 12]
-        let minimumWidths = [7, 5, 4, 6, 6, 5, 6]
+        var widths = [9, 9, 8, 12, 12, 24, 12]
+        let minimumWidths = [9, 5, 4, 6, 6, 5, 6]
         let separatorWidth = (widths.count - 1) * 2 + 2
         var overflow = widths.reduce(0, +) + separatorWidth - availableWidth
 

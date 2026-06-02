@@ -515,9 +515,29 @@ final class PRBuddyTests: XCTestCase {
     func testHeadersShowUpdatedSortState() {
         let renderer = TUIRenderer()
 
-        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none)[0], "Updated")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none)[0], "Updated  ")
         XCTAssertEqual(renderer.headers(updatedSortOrder: .ascending, fileSortOrder: .none)[0], "Updated ^")
         XCTAssertEqual(renderer.headers(updatedSortOrder: .descending, fileSortOrder: .none)[0], "Updated v")
+    }
+
+    func testUpdatedColumnWidthDoesNotChangeWhenSorting() {
+        let renderer = TUIRenderer()
+        let rows = renderer.tableRows(for: [makePullRequest()])
+        let unsortedHeaders = renderer.headers(updatedSortOrder: .none, fileSortOrder: .none)
+        let headers = renderer.headers(updatedSortOrder: .descending, fileSortOrder: .none)
+        let unsortedWidths = renderer.columnWidths(headers: unsortedHeaders, rows: rows)
+        let widths = renderer.columnWidths(headers: headers, rows: rows)
+        let rendered = renderer.renderHeaderRow(
+            headers,
+            widths: widths,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false
+        )
+
+        XCTAssertEqual(unsortedWidths[0], 9)
+        XCTAssertEqual(widths[0], 9)
+        XCTAssertTrue(rendered.contains("Updated v"))
+        XCTAssertFalse(rendered.contains("Update..."))
     }
 
     func testRenderHeaderRowHighlightsSelectedSortableHeaderOnly() {
