@@ -42,19 +42,17 @@ final class TUIRenderer {
 
     private let rightPaneRenderer = TUIRightPaneRenderer()
     private let headers = ["Updated", "Files", "Status", "Review", "Labels", "Title", "Author"]
-    private let maximumWidths = [14, 18, 8, 18, 24, 72, 24]
+    private let maximumWidths = [7, 18, 8, 18, 24, 72, 24]
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
-    private let relativeDateFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.dateTimeStyle = .numeric
-        formatter.unitsStyle = .full
-        return formatter
-    }()
+    private let updatedComponentsFormatter = DateComponentsFormatter()
     private var previousListLineCount = 0
 
     init(now: @escaping () -> Date = Date.init) {
         self.now = now
+        updatedComponentsFormatter.maximumUnitCount = 1
+        updatedComponentsFormatter.allowedUnits = [.year, .month, .weekOfMonth, .day, .hour, .minute]
+        updatedComponentsFormatter.unitsStyle = .full
     }
 
     func printTable(_ pullRequests: [PullRequest]) {
@@ -347,7 +345,31 @@ final class TUIRenderer {
             return "-"
         }
 
-        return relativeDateFormatter.localizedString(for: updatedDate, relativeTo: now())
+        let elapsedTime = max(0, now().timeIntervalSince(updatedDate))
+
+        guard elapsedTime >= 60 else {
+            return "now"
+        }
+
+        guard let components = updatedComponentsFormatter.string(from: elapsedTime)?.split(separator: " ").first else {
+            return "-"
+        }
+
+        let value = String(components)
+
+        if elapsedTime >= 365 * 24 * 60 * 60 {
+            return "\(value)y"
+        } else if elapsedTime >= 30 * 24 * 60 * 60 {
+            return "\(value)mo"
+        } else if elapsedTime >= 7 * 24 * 60 * 60 {
+            return "\(value)w"
+        } else if elapsedTime >= 24 * 60 * 60 {
+            return "\(value)d"
+        } else if elapsedTime >= 60 * 60 {
+            return "\(value)h"
+        }
+
+        return "\(value)m"
     }
 
     func attentionTableRows(for pullRequests: [PullRequest]) -> [[String]] {
@@ -542,7 +564,7 @@ final class TUIRenderer {
     }
 
     private func mainPaneMaximumWidths(availableWidth: Int) -> [Int] {
-        var widths = [14, 9, 8, 12, 12, 24, 12]
+        var widths = [7, 9, 8, 12, 12, 24, 12]
         let minimumWidths = [7, 5, 4, 6, 6, 5, 6]
         let separatorWidth = (widths.count - 1) * 2 + 2
         var overflow = widths.reduce(0, +) + separatorWidth - availableWidth

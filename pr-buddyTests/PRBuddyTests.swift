@@ -394,19 +394,35 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][0], "1 week ago")
+        XCTAssertEqual(rows[0][0], "1w")
         XCTAssertEqual(rows[0][1], "-")
         XCTAssertEqual(rows[0][3], "0")
         XCTAssertEqual(rows[0][4], "-")
         XCTAssertEqual(rows[0][6], "-")
     }
 
-    func testTableRowsFormatsUpdatedAtRelativeToNow() {
+    func testTableRowsFormatsUpdatedAtAsCompactElapsedTime() {
         let pullRequest = makePullRequest(updatedAt: "2026-06-01T11:50:00Z")
 
         let rows = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][0], "10 minutes ago")
+        XCTAssertEqual(rows[0][0], "10m")
+    }
+
+    func testTableRowsFormatsSubMinuteUpdatedAtAsNow() {
+        let pullRequest = makePullRequest(updatedAt: "2026-06-01T11:59:30Z")
+
+        let rows = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][0], "now")
+    }
+
+    func testTableRowsFormatsFutureUpdatedAtAsNow() {
+        let pullRequest = makePullRequest(updatedAt: "2026-06-01T12:01:00Z")
+
+        let rows = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][0], "now")
     }
 
     func testTableRowsFormatsMissingOrInvalidUpdatedAtAsPlaceholder() {
