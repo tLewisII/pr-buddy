@@ -148,8 +148,16 @@ extension PRBuddy {
         PullRequestFilter.normalized(value)
     }
 
-    static func sortedPullRequests(_ pullRequests: [PullRequest], fileSortOrder: FileSortOrder) -> [PullRequest] {
-        PullRequestFilter.sorted(pullRequests, fileSortOrder: fileSortOrder)
+    static func sortedPullRequests(
+        _ pullRequests: [PullRequest],
+        fileSortOrder: FileSortOrder,
+        updatedSortOrder: UpdatedSortOrder = .none
+    ) -> [PullRequest] {
+        PullRequestFilter.sorted(
+            pullRequests,
+            fileSortOrder: fileSortOrder,
+            updatedSortOrder: updatedSortOrder
+        )
     }
 
 #if DEBUG

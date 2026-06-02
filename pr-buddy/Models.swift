@@ -195,10 +195,43 @@ enum FileSortOrder: Equatable {
     }
 }
 
+enum UpdatedSortOrder: Equatable {
+    case none
+    case ascending
+    case descending
+
+    var next: UpdatedSortOrder {
+        switch self {
+        case .none:
+            return .ascending
+        case .ascending:
+            return .descending
+        case .descending:
+            return .none
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .none:
+            return "original order"
+        case .ascending:
+            return "oldest updates first"
+        case .descending:
+            return "newest updates first"
+        }
+    }
+}
+
 enum InteractiveFocus {
+    case updatedHeader
     case filesHeader
     case mainRow
     case attentionRow
+
+    var isSortableHeader: Bool {
+        self == .updatedHeader || self == .filesHeader
+    }
 }
 
 enum AppError: Error, CustomStringConvertible {

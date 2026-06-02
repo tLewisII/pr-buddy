@@ -357,6 +357,28 @@ final class PRBuddyTests: XCTestCase {
         )
     }
 
+    func testSortedPullRequestsSortsUpdatedAtInMemoryAndPreservesTies() {
+        let pullRequests = [
+            makePullRequest(number: 1, updatedAt: "2026-05-31T12:00:00Z"),
+            makePullRequest(number: 2, updatedAt: nil),
+            makePullRequest(number: 3, updatedAt: "2026-06-01T12:00:00Z"),
+            makePullRequest(number: 4, updatedAt: "2026-05-31T12:00:00Z")
+        ]
+
+        XCTAssertEqual(
+            PRBuddy.sortedPullRequests(pullRequests, fileSortOrder: .none, updatedSortOrder: .none).map(\.number),
+            [1, 2, 3, 4]
+        )
+        XCTAssertEqual(
+            PRBuddy.sortedPullRequests(pullRequests, fileSortOrder: .none, updatedSortOrder: .ascending).map(\.number),
+            [2, 1, 4, 3]
+        )
+        XCTAssertEqual(
+            PRBuddy.sortedPullRequests(pullRequests, fileSortOrder: .none, updatedSortOrder: .descending).map(\.number),
+            [3, 1, 4, 2]
+        )
+    }
+
     func testTableRowsFormatsMissingOptionalValues() {
         let pullRequest = makePullRequest(
             author: nil,
@@ -469,22 +491,39 @@ final class PRBuddyTests: XCTestCase {
     func testHeadersShowFileSortState() {
         let renderer = TUIRenderer()
 
-        XCTAssertEqual(renderer.headers(for: .none)[1], "Files")
-        XCTAssertEqual(renderer.headers(for: .ascending)[1], "Files ^")
-        XCTAssertEqual(renderer.headers(for: .descending)[1], "Files v")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none)[1], "Files")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .ascending)[1], "Files ^")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .descending)[1], "Files v")
     }
 
-    func testRenderHeaderRowHighlightsFilesHeaderOnly() {
+    func testHeadersShowUpdatedSortState() {
         let renderer = TUIRenderer()
-        let rendered = renderer.renderHeaderRow(
-            ["PR", "Files", "Status"],
-            widths: [2, 5, 6],
+
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none)[0], "Updated")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .ascending, fileSortOrder: .none)[0], "Updated ^")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .descending, fileSortOrder: .none)[0], "Updated v")
+    }
+
+    func testRenderHeaderRowHighlightsSelectedSortableHeaderOnly() {
+        let renderer = TUIRenderer()
+        let filesRendered = renderer.renderHeaderRow(
+            ["Updated", "Files", "Status"],
+            widths: [7, 5, 6],
+            isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: true
         )
+        let updatedRendered = renderer.renderHeaderRow(
+            ["Updated", "Files", "Status"],
+            widths: [7, 5, 6],
+            isUpdatedHeaderSelected: true,
+            isFilesHeaderSelected: false
+        )
 
-        XCTAssertTrue(rendered.contains("PR"))
-        XCTAssertTrue(rendered.contains("\u{001B}[7mFiles\u{001B}[0m"))
-        XCTAssertTrue(rendered.contains("Status"))
+        XCTAssertTrue(filesRendered.contains("Updated"))
+        XCTAssertTrue(filesRendered.contains("\u{001B}[7mFiles\u{001B}[0m"))
+        XCTAssertTrue(filesRendered.contains("Status"))
+        XCTAssertTrue(updatedRendered.contains("\u{001B}[7mUpdated\u{001B}[0m"))
+        XCTAssertFalse(updatedRendered.contains("\u{001B}[7mFiles\u{001B}[0m"))
     }
 
     func testTruncateUsesAsciiEllipsisAndKeepsRequestedWidth() {
@@ -570,8 +609,10 @@ final class PRBuddyTests: XCTestCase {
             ],
             selectedIndex: 1,
             topIndex: 0,
+            isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: false,
             isMainPaneSelected: true,
+            updatedSortOrder: .none,
             fileSortOrder: .descending,
             attentionPullRequests: [],
             attentionSelectedIndex: 0,
@@ -598,8 +639,10 @@ final class PRBuddyTests: XCTestCase {
             ],
             selectedIndex: 0,
             topIndex: 0,
+            isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: false,
             isMainPaneSelected: false,
+            updatedSortOrder: .none,
             fileSortOrder: .none,
             attentionPullRequests: [
                 makePullRequest(number: 201, title: "Update release notes", isDraft: true),

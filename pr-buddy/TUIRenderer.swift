@@ -73,8 +73,10 @@ final class TUIRenderer {
         pullRequests: [PullRequest],
         selectedIndex: Int,
         topIndex: Int,
+        isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isMainPaneSelected: Bool,
+        updatedSortOrder: UpdatedSortOrder,
         fileSortOrder: FileSortOrder,
         attentionPullRequests: [PullRequest],
         attentionSelectedIndex: Int,
@@ -87,8 +89,10 @@ final class TUIRenderer {
             pullRequests: pullRequests,
             selectedIndex: selectedIndex,
             topIndex: topIndex,
+            isUpdatedHeaderSelected: isUpdatedHeaderSelected,
             isFilesHeaderSelected: isFilesHeaderSelected,
             isMainPaneSelected: isMainPaneSelected,
+            updatedSortOrder: updatedSortOrder,
             fileSortOrder: fileSortOrder,
             attentionPullRequests: attentionPullRequests,
             attentionSelectedIndex: attentionSelectedIndex,
@@ -107,8 +111,10 @@ final class TUIRenderer {
         pullRequests: [PullRequest],
         selectedIndex: Int,
         topIndex: Int,
+        isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isMainPaneSelected: Bool,
+        updatedSortOrder: UpdatedSortOrder,
         fileSortOrder: FileSortOrder,
         attentionPullRequests: [PullRequest],
         attentionSelectedIndex: Int,
@@ -123,8 +129,10 @@ final class TUIRenderer {
             pullRequests: pullRequests,
             selectedIndex: selectedIndex,
             topIndex: topIndex,
+            isUpdatedHeaderSelected: isUpdatedHeaderSelected,
             isFilesHeaderSelected: isFilesHeaderSelected,
             isMainPaneSelected: isMainPaneSelected,
+            updatedSortOrder: updatedSortOrder,
             fileSortOrder: fileSortOrder,
             attentionPullRequests: attentionPullRequests,
             attentionSelectedIndex: attentionSelectedIndex,
@@ -141,8 +149,10 @@ final class TUIRenderer {
         pullRequests: [PullRequest],
         selectedIndex: Int,
         topIndex: Int,
+        isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isMainPaneSelected: Bool,
+        updatedSortOrder: UpdatedSortOrder,
         fileSortOrder: FileSortOrder,
         attentionPullRequests: [PullRequest],
         attentionSelectedIndex: Int,
@@ -154,7 +164,7 @@ final class TUIRenderer {
         terminalHeight: Int
     ) -> [String] {
         let rows = tableRows(for: pullRequests)
-        let headers = headers(for: fileSortOrder)
+        let headers = headers(updatedSortOrder: updatedSortOrder, fileSortOrder: fileSortOrder)
         let visibleRows = visibleListRows(terminalHeight: terminalHeight)
         let endIndex = min(rows.count, topIndex + visibleRows)
         let repoText = options.repo ?? "current repository"
@@ -167,6 +177,7 @@ final class TUIRenderer {
                 selectedIndex: selectedIndex,
                 topIndex: topIndex,
                 visibleRows: visibleRows,
+                isUpdatedHeaderSelected: isUpdatedHeaderSelected,
                 isFilesHeaderSelected: isFilesHeaderSelected,
                 repoText: repoText,
                 shownRange: shownRange,
@@ -194,7 +205,12 @@ final class TUIRenderer {
             message.isEmpty ? " " : message,
             "",
             joinPaneLines(
-                left: "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
+                left: "  " + renderHeaderRow(
+                    headers,
+                    widths: widths,
+                    isUpdatedHeaderSelected: isUpdatedHeaderSelected,
+                    isFilesHeaderSelected: isFilesHeaderSelected
+                ),
                 right: attentionHeader,
                 leftWidth: leftPaneWidth
             ),
@@ -212,7 +228,7 @@ final class TUIRenderer {
             let right: String
 
             if mainIndex < rows.count {
-                let isSelectedRow = !isFilesHeaderSelected && isMainPaneSelected && mainIndex == selectedIndex
+                let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && isMainPaneSelected && mainIndex == selectedIndex
                 let marker = isSelectedRow ? ">" : " "
                 let rendered = "\(marker) " + renderRow(rows[mainIndex], widths: widths)
                 left = isSelectedRow ? TUIFormat.inverted(rendered) : rendered
@@ -244,6 +260,7 @@ final class TUIRenderer {
         selectedIndex: Int,
         topIndex: Int,
         visibleRows: Int,
+        isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         repoText: String,
         shownRange: String,
@@ -253,10 +270,15 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange).  arrows/j/k move  enter on Files sort  enter/v view  c checkout  o open  r refresh  q quit",
+            "Showing \(shownRange).  arrows/j/k move  enter on Updated/Files sort  enter/v view  c checkout  o open  r refresh  q quit",
             message.isEmpty ? " " : message,
             "",
-            "  " + renderHeaderRow(headers, widths: widths, isFilesHeaderSelected: isFilesHeaderSelected),
+            "  " + renderHeaderRow(
+                headers,
+                widths: widths,
+                isUpdatedHeaderSelected: isUpdatedHeaderSelected,
+                isFilesHeaderSelected: isFilesHeaderSelected
+            ),
             "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  ")
         ]
 
@@ -266,7 +288,7 @@ final class TUIRenderer {
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            let isSelectedRow = !isFilesHeaderSelected && index == selectedIndex
+            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && index == selectedIndex
             let marker = isSelectedRow ? ">" : " "
             let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
 
@@ -384,8 +406,17 @@ final class TUIRenderer {
             .joined(separator: "  ")
     }
 
-    func headers(for fileSortOrder: FileSortOrder) -> [String] {
+    func headers(updatedSortOrder: UpdatedSortOrder, fileSortOrder: FileSortOrder) -> [String] {
         var headers = self.headers
+
+        switch updatedSortOrder {
+        case .none:
+            headers[0] = "Updated"
+        case .ascending:
+            headers[0] = "Updated ^"
+        case .descending:
+            headers[0] = "Updated v"
+        }
 
         switch fileSortOrder {
         case .none:
@@ -399,17 +430,26 @@ final class TUIRenderer {
         return headers
     }
 
-    func renderHeaderRow(_ row: [String], widths: [Int], isFilesHeaderSelected: Bool) -> String {
+    func renderHeaderRow(
+        _ row: [String],
+        widths: [Int],
+        isUpdatedHeaderSelected: Bool,
+        isFilesHeaderSelected: Bool
+    ) -> String {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
                 let paddedText = TUIFormat.padded(text, to: widths[column])
 
-                guard column == 1, isFilesHeaderSelected else {
-                    return paddedText
+                if column == 0, isUpdatedHeaderSelected {
+                    return TUIFormat.inverted(paddedText)
                 }
 
-                return TUIFormat.inverted(paddedText)
+                if column == 1, isFilesHeaderSelected {
+                    return TUIFormat.inverted(paddedText)
+                }
+
+                return paddedText
             }
             .joined(separator: "  ")
     }

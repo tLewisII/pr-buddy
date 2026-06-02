@@ -1,3 +1,5 @@
+import Foundation
+
 enum PullRequestFilter {
     static func matches(_ pullRequest: PullRequest, options: Options) -> Bool {
         if !options.changedFilesRange.contains(pullRequest.changedFiles ?? 0) {
@@ -48,7 +50,15 @@ enum PullRequestFilter {
             .filter { $0.isLetter || $0.isNumber }
     }
 
-    static func sorted(_ pullRequests: [PullRequest], fileSortOrder: FileSortOrder) -> [PullRequest] {
+    static func sorted(
+        _ pullRequests: [PullRequest],
+        fileSortOrder: FileSortOrder,
+        updatedSortOrder: UpdatedSortOrder = .none
+    ) -> [PullRequest] {
+        if updatedSortOrder != .none {
+            return sortedByUpdatedAt(pullRequests, updatedSortOrder: updatedSortOrder)
+        }
+
         guard fileSortOrder != .none else {
             return pullRequests
         }
@@ -72,5 +82,41 @@ enum PullRequestFilter {
                 }
             }
             .map(\.element)
+    }
+
+    private static func sortedByUpdatedAt(
+        _ pullRequests: [PullRequest],
+        updatedSortOrder: UpdatedSortOrder
+    ) -> [PullRequest] {
+        pullRequests.enumerated()
+            .sorted { lhs, rhs in
+                let leftDate = updatedDate(for: lhs.element)
+                let rightDate = updatedDate(for: rhs.element)
+
+                if leftDate == rightDate {
+                    return lhs.offset < rhs.offset
+                }
+
+                switch updatedSortOrder {
+                case .ascending:
+                    return leftDate < rightDate
+                case .descending:
+                    return leftDate > rightDate
+                case .none:
+                    return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
+    }
+
+    private static func updatedDate(for pullRequest: PullRequest) -> Date {
+        guard
+            let updatedAt = pullRequest.updatedAt,
+            let date = ISO8601DateFormatter().date(from: updatedAt)
+        else {
+            return .distantPast
+        }
+
+        return date
     }
 }
