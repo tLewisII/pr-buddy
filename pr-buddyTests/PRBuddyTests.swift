@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import pr_buddy
 
@@ -369,13 +370,28 @@ final class PRBuddyTests: XCTestCase {
             reviews: nil
         )
 
-        let rows = TUIRenderer().tableRows(for: [pullRequest])
+        let rows = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][0], "#42")
+        XCTAssertEqual(rows[0][0], "1 week ago")
         XCTAssertEqual(rows[0][1], "-")
         XCTAssertEqual(rows[0][3], "0")
         XCTAssertEqual(rows[0][4], "-")
         XCTAssertEqual(rows[0][6], "-")
+    }
+
+    func testTableRowsFormatsUpdatedAtRelativeToNow() {
+        let pullRequest = makePullRequest(updatedAt: "2026-06-01T11:50:00Z")
+
+        let rows = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][0], "10 minutes ago")
+    }
+
+    func testTableRowsFormatsMissingOrInvalidUpdatedAtAsPlaceholder() {
+        let renderer = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") })
+
+        XCTAssertEqual(renderer.tableRows(for: [makePullRequest(updatedAt: nil)])[0][0], "-")
+        XCTAssertEqual(renderer.tableRows(for: [makePullRequest(updatedAt: "not-a-date")])[0][0], "-")
     }
 
     func testTableRowsFormatsReviewCountAndStatusIcons() {
@@ -535,7 +551,7 @@ final class PRBuddyTests: XCTestCase {
         var options = Options()
         options.repo = "owner/project"
 
-        let rendered = TUIRenderer().renderPullRequestList(
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
             pullRequests: [
                 makePullRequest(),
                 makePullRequest(
@@ -575,7 +591,7 @@ final class PRBuddyTests: XCTestCase {
         options.repo = "owner/project"
         options.showMyPRs = true
 
-        let rendered = TUIRenderer().renderPullRequestList(
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
             pullRequests: [
                 makePullRequest(number: 101, title: "Review dashboard keyboard navigation", labels: ["ui"]),
                 makePullRequest(number: 102, title: "Fix stale checkout command", state: "MERGED", labels: ["cli"])
@@ -687,6 +703,14 @@ final class PRBuddyTests: XCTestCase {
             updatedAt: updatedAt,
             url: url
         )
+    }
+
+    private static func date(_ value: String) -> Date {
+        guard let date = ISO8601DateFormatter().date(from: value) else {
+            fatalError("Invalid test date: \(value)")
+        }
+
+        return date
     }
 }
 

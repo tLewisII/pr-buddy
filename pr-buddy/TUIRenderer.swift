@@ -10,7 +10,7 @@ import Foundation
 
 final class TUIRenderer {
     private enum TableColumn {
-        case number
+        case updated
         case files
         case status
         case review
@@ -21,7 +21,7 @@ final class TUIRenderer {
 
         init(index: Int) {
             if index == 0 {
-                self = .number
+                self = .updated
             } else if index == 1 {
                 self = .files
             } else if index == 2 {
@@ -41,9 +41,21 @@ final class TUIRenderer {
     }
 
     private let rightPaneRenderer = TUIRightPaneRenderer()
-    private let headers = ["PR", "Files", "Status", "Review", "Labels", "Title", "Author"]
-    private let maximumWidths = [6, 18, 8, 18, 24, 72, 24]
+    private let headers = ["Updated", "Files", "Status", "Review", "Labels", "Title", "Author"]
+    private let maximumWidths = [14, 18, 8, 18, 24, 72, 24]
+    private let now: () -> Date
+    private let updatedAtParser = ISO8601DateFormatter()
+    private let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.dateTimeStyle = .numeric
+        formatter.unitsStyle = .full
+        return formatter
+    }()
     private var previousListLineCount = 0
+
+    init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
 
     func printTable(_ pullRequests: [PullRequest]) {
         let rows = tableRows(for: pullRequests)
@@ -294,7 +306,7 @@ final class TUIRenderer {
     func tableRows(for pullRequests: [PullRequest]) -> [[String]] {
         pullRequests.map { pullRequest in
             [
-                "#\(pullRequest.number)",
+                updatedSummary(for: pullRequest),
                 fileSummary(for: pullRequest),
                 pullRequest.statusSummary,
                 pullRequest.reviewSummary,
@@ -303,6 +315,17 @@ final class TUIRenderer {
                 pullRequest.author?.login ?? "-"
             ]
         }
+    }
+
+    func updatedSummary(for pullRequest: PullRequest) -> String {
+        guard
+            let updatedAt = pullRequest.updatedAt,
+            let updatedDate = updatedAtParser.date(from: updatedAt)
+        else {
+            return "-"
+        }
+
+        return relativeDateFormatter.localizedString(for: updatedDate, relativeTo: now())
     }
 
     func attentionTableRows(for pullRequests: [PullRequest]) -> [[String]] {
@@ -346,7 +369,7 @@ final class TUIRenderer {
                 let paddedText = TUIFormat.padded(text, to: widths[column])
 
                 switch TableColumn(index: column) {
-                case .number, .author:
+                case .updated, .author:
                     return TUIFormat.colorized(paddedText, color: TUIFormat.Color.metadata)
                 case .files:
                     return colorizedFileSummary(paddedText)
@@ -479,8 +502,8 @@ final class TUIRenderer {
     }
 
     private func mainPaneMaximumWidths(availableWidth: Int) -> [Int] {
-        var widths = [6, 9, 8, 12, 12, 24, 12]
-        let minimumWidths = [3, 5, 4, 6, 6, 5, 6]
+        var widths = [14, 9, 8, 12, 12, 24, 12]
+        let minimumWidths = [7, 5, 4, 6, 6, 5, 6]
         let separatorWidth = (widths.count - 1) * 2 + 2
         var overflow = widths.reduce(0, +) + separatorWidth - availableWidth
 
