@@ -379,12 +379,12 @@ final class PRBuddyTests: XCTestCase {
         )
     }
 
-    func testSortedPullRequestsSortsReviewCountInMemoryAndPreservesTies() {
+    func testSortedPullRequestsSortsApprovalCountInMemoryAndPreservesTies() {
         let pullRequests = [
-            makePullRequest(number: 1, reviews: 2),
-            makePullRequest(number: 2, reviews: nil),
-            makePullRequest(number: 3, reviews: 4),
-            makePullRequest(number: 4, reviews: 2)
+            makePullRequest(number: 1, reviews: nil, reviewStates: ["APPROVED", "COMMENTED"]),
+            makePullRequest(number: 2, reviews: nil, reviewStates: ["COMMENTED", "COMMENTED", "COMMENTED"]),
+            makePullRequest(number: 3, reviews: nil, reviewStates: ["APPROVED", "APPROVED", "APPROVED"]),
+            makePullRequest(number: 4, reviews: nil, reviewStates: ["APPROVED", "CHANGES_REQUESTED"])
         ]
 
         XCTAssertEqual(
@@ -464,6 +464,18 @@ final class PRBuddyTests: XCTestCase {
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
         XCTAssertEqual(rows[0][3], "3 ✓ ✕ 🗨︎ 1")
+    }
+
+    func testTableRowsDoesNotInferApprovalIconsFromReviewDecision() {
+        let pullRequest = makePullRequest(
+            reviewDecision: "APPROVED",
+            reviews: 3,
+            reviewStates: nil
+        )
+
+        let rows = TUIRenderer().tableRows(for: [pullRequest])
+
+        XCTAssertEqual(rows[0][3], "3")
     }
 
     func testTableRowsCollapsesMoreThanThreeApprovalIcons() {

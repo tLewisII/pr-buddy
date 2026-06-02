@@ -95,8 +95,8 @@ enum PullRequestFilter {
     ) -> [PullRequest] {
         pullRequests.enumerated()
             .sorted { lhs, rhs in
-                let leftReviews = lhs.element.reviewCount
-                let rightReviews = rhs.element.reviewCount
+                let leftReviews = lhs.element.approvalCount
+                let rightReviews = rhs.element.approvalCount
 
                 if leftReviews == rightReviews {
                     return lhs.offset < rhs.offset

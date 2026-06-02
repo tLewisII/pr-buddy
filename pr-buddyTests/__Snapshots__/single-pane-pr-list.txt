@@ -5,4 +5,4 @@ Sorted by most files first.
   Updated    Files v       Status  Review    Labels             Title                                              Author
   ---------  ------------  ------  --------  -----------------  -------------------------------------------------  ----------
   1w         3 +12 -4      open    1         enhancement        Fix checkout flow                                  terry
-> 1w         12 +1200 -50  draft   3 ✓ ✓ ✓   bug, needs review  Ship snapshot renderer that truncates long titles  alexandria
+> 1w         12 +1200 -50  draft   3         bug, needs review  Ship snapshot renderer that truncates long titles  alexandria

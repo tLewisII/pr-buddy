@@ -113,13 +113,17 @@ struct PullRequest: Decodable {
         reviews?.count ?? 0
     }
 
-    private var reviewStatusIcons: [String] {
-        let reviewStates = reviews?.compactMap(\.state) ?? []
-        let states = reviewStates.isEmpty ? fallbackReviewStates : reviewStates
+    var approvalCount: Int {
+        reviews?.compactMap(\.state)
+            .map(normalizedReviewState)
+            .filter { $0 == "approved" }
+            .count ?? 0
+    }
 
+    private var reviewStatusIcons: [String] {
         var statusCounts: [(status: String, count: Int)] = []
 
-        for state in states {
+        for state in reviews?.compactMap(\.state) ?? [] {
             let status = normalizedReviewState(state)
 
             guard ["approved", "changes requested", "commented"].contains(status) else {
@@ -149,14 +153,6 @@ struct PullRequest: Decodable {
                 return []
             }
         }
-    }
-
-    private var fallbackReviewStates: [String] {
-        guard let reviewDecision else {
-            return []
-        }
-
-        return Array(repeating: reviewDecision, count: reviewCount)
     }
 
     private func normalizedReviewState(_ state: String) -> String {
@@ -244,9 +240,9 @@ enum ReviewSortOrder: Equatable {
         case .none:
             return "original order"
         case .ascending:
-            return "fewest reviews first"
+            return "fewest approvals first"
         case .descending:
-            return "most reviews first"
+            return "most approvals first"
         }
     }
 }
