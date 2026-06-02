@@ -28,9 +28,11 @@ enum InteractiveSession {
                 topIndex: state.topIndex,
                 isUpdatedHeaderSelected: state.focus == .updatedHeader,
                 isFilesHeaderSelected: state.focus == .filesHeader,
+                isReviewHeaderSelected: state.focus == .reviewHeader,
                 isMainPaneSelected: state.focus == .mainRow,
                 updatedSortOrder: state.updatedSortOrder,
                 fileSortOrder: state.fileSortOrder,
+                reviewSortOrder: state.reviewSortOrder,
                 attentionPullRequests: state.attentionPullRequests,
                 attentionSelectedIndex: state.attentionSelectedIndex,
                 attentionTopIndex: state.attentionTopIndex,
@@ -75,6 +77,9 @@ enum InteractiveSession {
         } else if state.focus == .filesHeader {
             state.sortByNextFileOrder()
             return true
+        } else if state.focus == .reviewHeader {
+            state.sortByNextReviewOrder()
+            return true
         }
 
         try viewSelectedPullRequest(state: &state, renderer: renderer, options: options)
@@ -83,7 +88,7 @@ enum InteractiveSession {
 
     private static func viewSelectedPullRequest(state: inout State, renderer: TUIRenderer, options: Options) throws {
         guard !state.focus.isSortableHeader else {
-            state.message = "Press enter on the Updated or Files header to change sorting."
+            state.message = "Press enter on the Updated, Files, or Review header to change sorting."
             return
         }
 
@@ -140,6 +145,7 @@ extension InteractiveSession {
         var basePullRequests: [PullRequest]
         var fileSortOrder = FileSortOrder.none
         var updatedSortOrder = UpdatedSortOrder.none
+        var reviewSortOrder = ReviewSortOrder.none
         var pullRequests: [PullRequest]
         var attentionPullRequests: [PullRequest]
         var focus: InteractiveFocus
@@ -156,7 +162,12 @@ extension InteractiveSession {
             showMyPRs: Bool
         ) {
             self.basePullRequests = basePullRequests
-            self.pullRequests = PullRequestFilter.sorted(basePullRequests, fileSortOrder: .none, updatedSortOrder: .none)
+            self.pullRequests = PullRequestFilter.sorted(
+                basePullRequests,
+                fileSortOrder: .none,
+                updatedSortOrder: .none,
+                reviewSortOrder: .none
+            )
             self.attentionPullRequests = attentionPullRequests
             self.focus = showMyPRs && basePullRequests.isEmpty && !attentionPullRequests.isEmpty ? .attentionRow : .mainRow
             self.message = Self.fetchedMessage(
@@ -230,10 +241,12 @@ extension InteractiveSession {
         }
 
         mutating func moveLeft(showMyPRs: Bool) {
-            if focus == .filesHeader {
+            if focus == .reviewHeader {
+                focus = .filesHeader
+            } else if focus == .filesHeader {
                 focus = .updatedHeader
             } else if showMyPRs && focus == .attentionRow {
-                focus = pullRequests.isEmpty ? .filesHeader : .mainRow
+                focus = pullRequests.isEmpty ? .reviewHeader : .mainRow
             }
             message = ""
         }
@@ -241,6 +254,8 @@ extension InteractiveSession {
         mutating func moveRight(showMyPRs: Bool) {
             if focus == .updatedHeader {
                 focus = .filesHeader
+            } else if focus == .filesHeader {
+                focus = .reviewHeader
             } else if showMyPRs && !attentionPullRequests.isEmpty {
                 focus = .attentionRow
             }
@@ -250,10 +265,12 @@ extension InteractiveSession {
         mutating func sortByNextUpdatedOrder() {
             updatedSortOrder = updatedSortOrder.next
             fileSortOrder = .none
+            reviewSortOrder = .none
             pullRequests = PullRequestFilter.sorted(
                 basePullRequests,
                 fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder
+                updatedSortOrder: updatedSortOrder,
+                reviewSortOrder: reviewSortOrder
             )
             selectedIndex = 0
             topIndex = 0
@@ -263,14 +280,31 @@ extension InteractiveSession {
         mutating func sortByNextFileOrder() {
             fileSortOrder = fileSortOrder.next
             updatedSortOrder = .none
+            reviewSortOrder = .none
             pullRequests = PullRequestFilter.sorted(
                 basePullRequests,
                 fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder
+                updatedSortOrder: updatedSortOrder,
+                reviewSortOrder: reviewSortOrder
             )
             selectedIndex = 0
             topIndex = 0
             message = "Sorted by files: \(fileSortOrder.description)."
+        }
+
+        mutating func sortByNextReviewOrder() {
+            reviewSortOrder = reviewSortOrder.next
+            updatedSortOrder = .none
+            fileSortOrder = .none
+            pullRequests = PullRequestFilter.sorted(
+                basePullRequests,
+                fileSortOrder: fileSortOrder,
+                updatedSortOrder: updatedSortOrder,
+                reviewSortOrder: reviewSortOrder
+            )
+            selectedIndex = 0
+            topIndex = 0
+            message = "Sorted by reviews: \(reviewSortOrder.description)."
         }
 
         mutating func refresh(options: Options) throws {
@@ -283,7 +317,8 @@ extension InteractiveSession {
             pullRequests = PullRequestFilter.sorted(
                 basePullRequests,
                 fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder
+                updatedSortOrder: updatedSortOrder,
+                reviewSortOrder: reviewSortOrder
             )
             attentionPullRequests = options.showMyPRs
                 ? try GitHubClient.fetchAttentionPullRequests(options: options)

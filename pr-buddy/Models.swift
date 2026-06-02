@@ -223,14 +223,43 @@ enum UpdatedSortOrder: Equatable {
     }
 }
 
+enum ReviewSortOrder: Equatable {
+    case none
+    case ascending
+    case descending
+
+    var next: ReviewSortOrder {
+        switch self {
+        case .none:
+            return .ascending
+        case .ascending:
+            return .descending
+        case .descending:
+            return .none
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .none:
+            return "original order"
+        case .ascending:
+            return "fewest reviews first"
+        case .descending:
+            return "most reviews first"
+        }
+    }
+}
+
 enum InteractiveFocus {
     case updatedHeader
     case filesHeader
+    case reviewHeader
     case mainRow
     case attentionRow
 
     var isSortableHeader: Bool {
-        self == .updatedHeader || self == .filesHeader
+        self == .updatedHeader || self == .filesHeader || self == .reviewHeader
     }
 }
 

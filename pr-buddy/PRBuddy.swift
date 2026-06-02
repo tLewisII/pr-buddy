@@ -151,12 +151,14 @@ extension PRBuddy {
     static func sortedPullRequests(
         _ pullRequests: [PullRequest],
         fileSortOrder: FileSortOrder,
-        updatedSortOrder: UpdatedSortOrder = .none
+        updatedSortOrder: UpdatedSortOrder = .none,
+        reviewSortOrder: ReviewSortOrder = .none
     ) -> [PullRequest] {
         PullRequestFilter.sorted(
             pullRequests,
             fileSortOrder: fileSortOrder,
-            updatedSortOrder: updatedSortOrder
+            updatedSortOrder: updatedSortOrder,
+            reviewSortOrder: reviewSortOrder
         )
     }
 

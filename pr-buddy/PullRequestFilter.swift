@@ -53,10 +53,15 @@ enum PullRequestFilter {
     static func sorted(
         _ pullRequests: [PullRequest],
         fileSortOrder: FileSortOrder,
-        updatedSortOrder: UpdatedSortOrder = .none
+        updatedSortOrder: UpdatedSortOrder = .none,
+        reviewSortOrder: ReviewSortOrder = .none
     ) -> [PullRequest] {
         if updatedSortOrder != .none {
             return sortedByUpdatedAt(pullRequests, updatedSortOrder: updatedSortOrder)
+        }
+
+        if reviewSortOrder != .none {
+            return sortedByReviews(pullRequests, reviewSortOrder: reviewSortOrder)
         }
 
         guard fileSortOrder != .none else {
@@ -77,6 +82,31 @@ enum PullRequestFilter {
                     return leftFiles < rightFiles
                 case .descending:
                     return leftFiles > rightFiles
+                case .none:
+                    return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
+    }
+
+    private static func sortedByReviews(
+        _ pullRequests: [PullRequest],
+        reviewSortOrder: ReviewSortOrder
+    ) -> [PullRequest] {
+        pullRequests.enumerated()
+            .sorted { lhs, rhs in
+                let leftReviews = lhs.element.reviewCount
+                let rightReviews = rhs.element.reviewCount
+
+                if leftReviews == rightReviews {
+                    return lhs.offset < rhs.offset
+                }
+
+                switch reviewSortOrder {
+                case .ascending:
+                    return leftReviews < rightReviews
+                case .descending:
+                    return leftReviews > rightReviews
                 case .none:
                     return lhs.offset < rhs.offset
                 }
