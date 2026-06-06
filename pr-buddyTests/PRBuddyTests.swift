@@ -739,6 +739,43 @@ final class PRBuddyTests: XCTestCase {
         try assertSnapshot(rendered, named: "single-pane-pr-list.txt")
     }
 
+    func testSinglePanePullRequestListFitsTerminalWidth() {
+        var options = Options()
+        options.repo = "owner/project-with-a-long-name"
+
+        let terminalWidth = 72
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [
+                makePullRequest(
+                    title: "A long pull request title that would otherwise exceed the terminal width",
+                    author: PullRequest.Author(login: "long-author-name"),
+                    labels: ["long-label", "another-long-label"]
+                )
+            ],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainPaneSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionPaneSelected: false,
+            options: options,
+            message: "A status message that is intentionally longer than the terminal width so it must be clipped.",
+            terminalWidth: terminalWidth,
+            terminalHeight: 14
+        )
+
+        for line in rendered.split(separator: "\n", omittingEmptySubsequences: false) {
+            XCTAssertLessThanOrEqual(TUIFormat.visibleLength(String(line)), terminalWidth)
+        }
+    }
+
     func testDualPanePullRequestListMatchesSnapshot() throws {
         var options = Options()
         options.repo = "owner/project"

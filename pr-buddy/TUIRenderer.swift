@@ -194,7 +194,8 @@ final class TUIRenderer {
                 isReviewHeaderSelected: isReviewHeaderSelected,
                 repoText: repoText,
                 shownRange: shownRange,
-                message: message
+                message: message,
+                terminalWidth: terminalWidth
             )
         }
 
@@ -214,7 +215,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Main \(shownRange).  My PRs \(attentionShownRange).  arrows/h/j/k/l move  enter/v view  c checkout  o open  r refresh  q quit",
+            "Main \(shownRange)  My PRs \(attentionShownRange)  arrows/hjkl  view enter/v  checkout c  open o  refresh r  quit q",
             message.isEmpty ? " " : message,
             "",
             joinPaneLines(
@@ -265,7 +266,7 @@ final class TUIRenderer {
             lines.append(joinPaneLines(left: left, right: right, leftWidth: leftPaneWidth))
         }
 
-        return lines
+        return lines.map { clippedLine($0, to: terminalWidth) }
     }
 
     private func singlePanePullRequestListLines(
@@ -279,13 +280,18 @@ final class TUIRenderer {
         isReviewHeaderSelected: Bool,
         repoText: String,
         shownRange: String,
-        message: String
+        message: String,
+        terminalWidth: Int
     ) -> [String] {
-        let widths = columnWidths(headers: headers, rows: rows)
+        let widths = columnWidths(
+            headers: headers,
+            rows: rows,
+            maximumWidths: mainPaneMaximumWidths(availableWidth: terminalWidth)
+        )
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange).  arrows/j/k move  enter on Updated/Files/Review sort  enter/v view  c checkout  o open  r refresh  q quit",
+            "Showing \(shownRange)  move arrows/jk  view enter/v  checkout c  open o  refresh r  quit q",
             message.isEmpty ? " " : message,
             "",
             "  " + renderHeaderRow(
@@ -300,7 +306,7 @@ final class TUIRenderer {
 
         if rows.isEmpty {
             lines.append("  No pull requests matched the current filters.")
-            return lines
+            return lines.map { clippedLine($0, to: terminalWidth) }
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
@@ -315,7 +321,7 @@ final class TUIRenderer {
             }
         }
 
-        return lines
+        return lines.map { clippedLine($0, to: terminalWidth) }
     }
 
     func drawCommandResult(title: String, result: CommandResult) {
@@ -621,6 +627,10 @@ final class TUIRenderer {
     private func joinPaneLines(left: String, right: String, leftWidth: Int) -> String {
         let clippedLeft = TUIFormat.clipped(left, to: leftWidth)
         return clippedLeft + String(repeating: " ", count: max(1, leftWidth - TUIFormat.visibleLength(clippedLeft) + 1)) + right
+    }
+
+    private func clippedLine(_ line: String, to terminalWidth: Int) -> String {
+        TUIFormat.clipped(line, to: max(1, terminalWidth))
     }
 
     private func drawListLines(_ lines: [String]) {
