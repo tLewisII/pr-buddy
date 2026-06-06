@@ -286,6 +286,16 @@ enum InputKey {
     case o
     case r
     case q
+    case search
+    case unknown
+}
+
+enum SearchInput: Equatable {
+    case character(Character)
+    case backspace
+    case submit
+    case cancel
+    case clear
     case unknown
 }
 

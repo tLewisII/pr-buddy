@@ -38,7 +38,7 @@ enum InteractiveSession {
                 attentionTopIndex: state.attentionTopIndex,
                 isAttentionPaneSelected: state.focus == .attentionRow,
                 options: options,
-                message: state.message
+                message: state.displayMessage
             )
 
             switch readKey() {
@@ -64,8 +64,59 @@ enum InteractiveSession {
                 try state.refresh(options: options)
             case .q:
                 return
+            case .search:
+                editTextFilter(state: &state, renderer: renderer, options: options)
             case .unknown:
-                state.message = "Use arrows/h/j/k/l to move panes and rows, enter/v view, c checkout, o open, r refresh, q quit."
+                state.message = "Use / to filter, arrows/h/j/k/l to move, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+            }
+        }
+    }
+
+    private static func editTextFilter(state: inout State, renderer: TUIRenderer, options: Options) {
+        let originalQuery = state.textFilter
+        var query = originalQuery
+
+        while true {
+            state.previewTextFilter(query)
+            state.keepSelectionsVisible(visibleRows: renderer.visibleListRows())
+            renderer.drawPullRequestList(
+                pullRequests: state.pullRequests,
+                selectedIndex: state.selectedIndex,
+                topIndex: state.topIndex,
+                isUpdatedHeaderSelected: state.focus == .updatedHeader,
+                isFilesHeaderSelected: state.focus == .filesHeader,
+                isReviewHeaderSelected: state.focus == .reviewHeader,
+                isMainPaneSelected: state.focus == .mainRow,
+                updatedSortOrder: state.updatedSortOrder,
+                fileSortOrder: state.fileSortOrder,
+                reviewSortOrder: state.reviewSortOrder,
+                attentionPullRequests: state.attentionPullRequests,
+                attentionSelectedIndex: state.attentionSelectedIndex,
+                attentionTopIndex: state.attentionTopIndex,
+                isAttentionPaneSelected: state.focus == .attentionRow,
+                options: options,
+                message: "Filter: \(query)_  enter apply  ctrl-u clear  esc cancel  backspace edit"
+            )
+
+            switch readSearchInput() {
+            case .character(let character):
+                query.append(character)
+            case .backspace:
+                if !query.isEmpty {
+                    query.removeLast()
+                }
+            case .submit:
+                state.applyTextFilter(query)
+                return
+            case .cancel:
+                state.applyTextFilter(originalQuery)
+                state.message = originalQuery.isEmpty ? "Filter cancelled." : "Filter unchanged."
+                return
+            case .clear:
+                state.applyTextFilter("")
+                return
+            case .unknown:
+                continue
             }
         }
     }
@@ -143,6 +194,7 @@ enum InteractiveSession {
 extension InteractiveSession {
     struct State {
         var basePullRequests: [PullRequest]
+        var baseAttentionPullRequests: [PullRequest]
         var fileSortOrder = FileSortOrder.none
         var updatedSortOrder = UpdatedSortOrder.none
         var reviewSortOrder = ReviewSortOrder.none
@@ -154,6 +206,7 @@ extension InteractiveSession {
         var topIndex = 0
         var attentionTopIndex = 0
         var message: String
+        var textFilter = ""
         private let showMyPRs: Bool
 
         init(
@@ -162,6 +215,7 @@ extension InteractiveSession {
             showMyPRs: Bool
         ) {
             self.basePullRequests = basePullRequests
+            self.baseAttentionPullRequests = attentionPullRequests
             self.pullRequests = PullRequestFilter.sorted(
                 basePullRequests,
                 fileSortOrder: .none,
@@ -176,6 +230,18 @@ extension InteractiveSession {
                 showMyPRs: showMyPRs
             )
             self.showMyPRs = showMyPRs
+        }
+
+        var displayMessage: String {
+            if !message.isEmpty {
+                return message
+            }
+
+            guard !textFilter.isEmpty else {
+                return ""
+            }
+
+            return "Filter: \(textFilter)  (\(pullRequests.count) match\(pullRequests.count == 1 ? "" : "es"))"
         }
 
         var selectedPullRequest: PullRequest? {
@@ -266,12 +332,7 @@ extension InteractiveSession {
             updatedSortOrder = updatedSortOrder.next
             fileSortOrder = .none
             reviewSortOrder = .none
-            pullRequests = PullRequestFilter.sorted(
-                basePullRequests,
-                fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder,
-                reviewSortOrder: reviewSortOrder
-            )
+            updateFilteredPullRequests()
             selectedIndex = 0
             topIndex = 0
             message = "Sorted by updated date: \(updatedSortOrder.description)."
@@ -281,12 +342,7 @@ extension InteractiveSession {
             fileSortOrder = fileSortOrder.next
             updatedSortOrder = .none
             reviewSortOrder = .none
-            pullRequests = PullRequestFilter.sorted(
-                basePullRequests,
-                fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder,
-                reviewSortOrder: reviewSortOrder
-            )
+            updateFilteredPullRequests()
             selectedIndex = 0
             topIndex = 0
             message = "Sorted by files: \(fileSortOrder.description)."
@@ -296,12 +352,7 @@ extension InteractiveSession {
             reviewSortOrder = reviewSortOrder.next
             updatedSortOrder = .none
             fileSortOrder = .none
-            pullRequests = PullRequestFilter.sorted(
-                basePullRequests,
-                fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder,
-                reviewSortOrder: reviewSortOrder
-            )
+            updateFilteredPullRequests()
             selectedIndex = 0
             topIndex = 0
             message = "Sorted by reviews: \(reviewSortOrder.description)."
@@ -314,15 +365,10 @@ extension InteractiveSession {
                 : nil
 
             basePullRequests = try GitHubClient.fetchMainPullRequests(options: options)
-            pullRequests = PullRequestFilter.sorted(
-                basePullRequests,
-                fileSortOrder: fileSortOrder,
-                updatedSortOrder: updatedSortOrder,
-                reviewSortOrder: reviewSortOrder
-            )
-            attentionPullRequests = options.showMyPRs
+            baseAttentionPullRequests = options.showMyPRs
                 ? try GitHubClient.fetchAttentionPullRequests(options: options)
                 : []
+            updateFilteredPullRequests()
 
             selectedIndex = Self.updatedSelectionIndex(
                 currentIndex: selectedIndex,
@@ -340,6 +386,45 @@ extension InteractiveSession {
                 attentionPullRequests: attentionPullRequests,
                 showMyPRs: options.showMyPRs
             )
+        }
+
+        mutating func previewTextFilter(_ query: String) {
+            textFilter = query
+            updateFilteredPullRequests()
+            selectedIndex = 0
+            attentionSelectedIndex = 0
+            topIndex = 0
+            attentionTopIndex = 0
+
+            if !pullRequests.isEmpty {
+                focus = .mainRow
+            } else if showMyPRs && !attentionPullRequests.isEmpty {
+                focus = .attentionRow
+            } else {
+                focus = .updatedHeader
+            }
+        }
+
+        mutating func applyTextFilter(_ query: String) {
+            previewTextFilter(query.trimmingCharacters(in: .whitespacesAndNewlines))
+            message = textFilter.isEmpty
+                ? "Filter cleared."
+                : "Filter: \(textFilter)  (\(pullRequests.count) match\(pullRequests.count == 1 ? "" : "es"))"
+        }
+
+        private mutating func updateFilteredPullRequests() {
+            let filteredMain = basePullRequests.filter {
+                PullRequestFilter.matchesTextQuery($0, query: textFilter)
+            }
+            pullRequests = PullRequestFilter.sorted(
+                filteredMain,
+                fileSortOrder: fileSortOrder,
+                updatedSortOrder: updatedSortOrder,
+                reviewSortOrder: reviewSortOrder
+            )
+            attentionPullRequests = baseAttentionPullRequests.filter {
+                PullRequestFilter.matchesTextQuery($0, query: textFilter)
+            }
         }
 
         private mutating func updateFocusAfterRefresh(showMyPRs: Bool) {

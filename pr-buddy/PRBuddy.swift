@@ -43,6 +43,7 @@ private struct PRBuddyCommand: ParsableCommand {
         abstract: "Fetch pull requests with `gh pr list` and open an interactive PR picker when run in a terminal.",
         discussion: """
         Interactive keys:
+          /              Filter PRs by text or fields.
           arrows, j/k    Move selection.
           enter, v       View selected PR details.
           c              Checkout selected PR.
@@ -50,6 +51,13 @@ private struct PRBuddyCommand: ParsableCommand {
           r              Refresh PRs.
           q              Quit.
           --show-my-prs   Show a right pane with PRs that involve you.
+
+        Interactive filter fields:
+          ctrl-u          Clear the active filter.
+          status:draft    Match status or review decision.
+          label:bug,ui    Require labels.
+          files:2..8      Match changed-file count or range.
+          reviews:1..     Match review count or range.
         """
     )
 

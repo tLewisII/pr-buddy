@@ -12,6 +12,7 @@ private enum TerminalByte {
     case q
     case r
     case v
+    case search
     case unknown
 
     init(_ byte: UInt8) {
@@ -37,6 +38,8 @@ private enum TerminalByte {
             self = .r
         } else if byte == 118 || byte == 86 {
             self = .v
+        } else if byte == 47 {
+            self = .search
         } else {
             self = .unknown
         }
@@ -114,7 +117,76 @@ func readKey() -> InputKey {
         return .r
     case .v:
         return .v
+    case .search:
+        return .search
     case .unknown:
         return .unknown
     }
+}
+
+func readSearchInput() -> SearchInput {
+    var byte: UInt8 = 0
+
+    guard read(STDIN_FILENO, &byte, 1) == 1 else {
+        return .unknown
+    }
+
+    if let controlInput = searchControlInput(for: byte) {
+        return controlInput
+    }
+
+    guard byte >= 32 else {
+        return .unknown
+    }
+
+    var bytes = [byte]
+    let additionalByteCount: Int
+
+    if byte < 0x80 {
+        additionalByteCount = 0
+    } else if byte & 0xE0 == 0xC0 {
+        additionalByteCount = 1
+    } else if byte & 0xF0 == 0xE0 {
+        additionalByteCount = 2
+    } else if byte & 0xF8 == 0xF0 {
+        additionalByteCount = 3
+    } else {
+        return .unknown
+    }
+
+    for _ in 0..<additionalByteCount {
+        var continuationByte: UInt8 = 0
+
+        guard read(STDIN_FILENO, &continuationByte, 1) == 1 else {
+            return .unknown
+        }
+
+        bytes.append(continuationByte)
+    }
+
+    guard let value = String(bytes: bytes, encoding: .utf8), let character = value.first else {
+        return .unknown
+    }
+
+    return .character(character)
+}
+
+func searchControlInput(for byte: UInt8) -> SearchInput? {
+    if byte == 10 || byte == 13 {
+        return .submit
+    }
+
+    if byte == 27 {
+        return .cancel
+    }
+
+    if byte == 8 || byte == 127 {
+        return .backspace
+    }
+
+    if byte == 21 {
+        return .clear
+    }
+
+    return nil
 }

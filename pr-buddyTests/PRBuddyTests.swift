@@ -270,6 +270,79 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertTrue(PRBuddy.matchesFilters(pullRequest, options: maxOptions))
     }
 
+    func testTextFilterMatchesNumberTitleAuthorBranchAndLabels() {
+        let pullRequest = makePullRequest(
+            number: 142,
+            title: "Improve checkout flow",
+            author: PullRequest.Author(login: "alexandria"),
+            headRefName: "feature/quick-filter",
+            labels: ["needs review", "cli"]
+        )
+
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "#142"))
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "checkout alex"))
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "quick filter"))
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "needs-review cli"))
+        XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "checkout web"))
+    }
+
+    func testTextFilterSupportsStatusLabelFileAndReviewFields() {
+        let pullRequest = makePullRequest(
+            state: "OPEN",
+            isDraft: true,
+            changedFiles: 7,
+            labels: ["bug", "needs review"],
+            reviews: 3
+        )
+
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "status:draft"))
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "status:open,draft"))
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "label:bug,needs-review"))
+        XCTAssertTrue(PullRequestFilter.matchesTextQuery(pullRequest, query: "files:2..8 reviews:3.."))
+        XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "status:merged"))
+        XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "label:ui"))
+        XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "files:8.."))
+        XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "reviews:..2"))
+        XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "files:invalid"))
+    }
+
+    func testInteractiveTextFilterAppliesToBothPanesAndCanBeCleared() {
+        var state = InteractiveSession.State(
+            basePullRequests: [
+                makePullRequest(number: 1, title: "Fix checkout flow"),
+                makePullRequest(number: 2, title: "Update release notes")
+            ],
+            attentionPullRequests: [
+                makePullRequest(number: 3, title: "Review checkout errors"),
+                makePullRequest(number: 4, title: "Document parser behavior")
+            ],
+            showMyPRs: true
+        )
+
+        state.applyTextFilter("checkout")
+
+        XCTAssertEqual(state.pullRequests.map(\.number), [1])
+        XCTAssertEqual(state.attentionPullRequests.map(\.number), [3])
+        XCTAssertEqual(state.textFilter, "checkout")
+        XCTAssertTrue(state.displayMessage.contains("1 match"))
+
+        state.message = ""
+        XCTAssertTrue(state.displayMessage.contains("Filter: checkout"))
+
+        state.applyTextFilter("  ")
+
+        XCTAssertEqual(state.pullRequests.map(\.number), [1, 2])
+        XCTAssertEqual(state.attentionPullRequests.map(\.number), [3, 4])
+        XCTAssertEqual(state.textFilter, "")
+    }
+
+    func testFilterModeControlUClearsWithoutInterceptingC() {
+        XCTAssertEqual(searchControlInput(for: 21), .clear)
+        XCTAssertNil(searchControlInput(for: 99))
+        XCTAssertNil(searchControlInput(for: 67))
+        XCTAssertNil(searchControlInput(for: 120))
+    }
+
     func testMatchesFiltersRejectsMissingLabel() {
         let pullRequest = makePullRequest(labels: ["bug"])
         var options = Options()

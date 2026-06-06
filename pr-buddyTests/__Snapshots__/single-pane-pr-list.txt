@@ -1,5 +1,5 @@
 pr-buddy  owner/project
-Showing 1-2 of 2  move arrows/jk  view enter/v  checkout c  open o  refresh r  quit q
+Showing 1-2 of 2  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q
 Sorted by most files first.
 
   Updated    Files v    Status  Review    Labels        Title                     Author

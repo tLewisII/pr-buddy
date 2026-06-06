@@ -215,7 +215,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Main \(shownRange)  My PRs \(attentionShownRange)  arrows/hjkl  view enter/v  checkout c  open o  refresh r  quit q",
+            "Main \(shownRange)  My PRs \(attentionShownRange)  / filter  hjkl/arrows  enter/v view  c checkout  o web  r refresh  q",
             message.isEmpty ? " " : message,
             "",
             joinPaneLines(
@@ -291,7 +291,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange)  move arrows/jk  view enter/v  checkout c  open o  refresh r  quit q",
+            "Showing \(shownRange)  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q",
             message.isEmpty ? " " : message,
             "",
             "  " + renderHeaderRow(
