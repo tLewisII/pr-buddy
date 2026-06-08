@@ -17,7 +17,6 @@ struct Options {
     var minReviews: Int?
     var maxReviews: Int?
     var limit = 50
-    var showMyPRs = false
 #if DEBUG
     var debugJSONPath: String?
 #endif
@@ -286,6 +285,7 @@ enum InputKey {
     case o
     case r
     case q
+    case tab
     case search
     case unknown
 }

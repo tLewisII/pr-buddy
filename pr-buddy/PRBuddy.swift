@@ -17,9 +17,7 @@ struct PRBuddy {
         let pullRequests = try GitHubClient.fetchMainPullRequests(options: options)
 
         if isatty(STDIN_FILENO) != 0 {
-            let attentionPullRequests = options.showMyPRs
-                ? try GitHubClient.fetchAttentionPullRequests(options: options)
-                : []
+            let attentionPullRequests = try GitHubClient.fetchAttentionPullRequests(options: options)
             try InteractiveSession.run(
                 initialPullRequests: pullRequests,
                 initialAttentionPullRequests: attentionPullRequests,
@@ -45,12 +43,12 @@ private struct PRBuddyCommand: ParsableCommand {
         Interactive keys:
           /              Filter PRs by text or fields.
           arrows, j/k    Move selection.
+          tab            Toggle main and involves:@me views.
           enter, v       View selected PR details.
           c              Checkout selected PR.
           o              Open selected PR in the browser.
           r              Refresh PRs.
           q              Quit.
-          --show-my-prs   Show a right pane with PRs that involve you.
 
         Interactive filter fields:
           ctrl-u          Clear the active filter.
@@ -88,9 +86,6 @@ private struct PRBuddyCommand: ParsableCommand {
     @Option(name: .customLong("limit"), help: "Maximum PRs to fetch before local filters.")
     var limit = 50
 
-    @Flag(name: .customLong("show-my-prs"), help: "Show a right pane with open PRs that involve you.")
-    var showMyPRs = false
-
 #if DEBUG
     @Option(name: .customLong("debug-json"), help: "DEBUG only: read pull request JSON from a local file instead of running `gh pr list`.")
     var debugJSONPath: String?
@@ -113,7 +108,6 @@ private struct PRBuddyCommand: ParsableCommand {
         options.minChangedFiles = minChangedFiles
         options.maxChangedFiles = maxChangedFiles
         options.limit = limit
-        options.showMyPRs = showMyPRs
 #if DEBUG
         options.debugJSONPath = debugJSONPath
 #endif

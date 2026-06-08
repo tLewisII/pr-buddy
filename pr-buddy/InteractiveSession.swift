@@ -1,3 +1,5 @@
+import Foundation
+
 enum InteractiveSession {
     static func run(
         initialPullRequests: [PullRequest],
@@ -14,8 +16,7 @@ enum InteractiveSession {
 
         var state = State(
             basePullRequests: initialPullRequests,
-            attentionPullRequests: initialAttentionPullRequests,
-            showMyPRs: options.showMyPRs
+            attentionPullRequests: initialAttentionPullRequests
         )
 
         renderer.hideCursor()
@@ -47,9 +48,9 @@ enum InteractiveSession {
             case .down, .j:
                 state.moveDown()
             case .left, .h:
-                state.moveLeft(showMyPRs: options.showMyPRs)
+                state.moveLeft()
             case .right, .l:
-                state.moveRight(showMyPRs: options.showMyPRs)
+                state.moveRight()
             case .enter:
                 if try handleEnter(state: &state, renderer: renderer, options: options) {
                     continue
@@ -62,12 +63,14 @@ enum InteractiveSession {
                 try openSelectedPullRequest(state: &state, options: options)
             case .r:
                 try state.refresh(options: options)
+            case .tab:
+                state.toggleView()
             case .q:
                 return
             case .search:
                 editTextFilter(state: &state, renderer: renderer, options: options)
             case .unknown:
-                state.message = "Use / to filter, arrows/h/j/k/l to move, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+                state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
             }
         }
     }
@@ -207,12 +210,9 @@ extension InteractiveSession {
         var attentionTopIndex = 0
         var message: String
         var textFilter = ""
-        private let showMyPRs: Bool
-
         init(
             basePullRequests: [PullRequest],
-            attentionPullRequests: [PullRequest],
-            showMyPRs: Bool
+            attentionPullRequests: [PullRequest]
         ) {
             self.basePullRequests = basePullRequests
             self.baseAttentionPullRequests = attentionPullRequests
@@ -223,13 +223,11 @@ extension InteractiveSession {
                 reviewSortOrder: .none
             )
             self.attentionPullRequests = attentionPullRequests
-            self.focus = showMyPRs && basePullRequests.isEmpty && !attentionPullRequests.isEmpty ? .attentionRow : .mainRow
+            self.focus = basePullRequests.isEmpty && !attentionPullRequests.isEmpty ? .attentionRow : .mainRow
             self.message = Self.fetchedMessage(
                 pullRequests: basePullRequests,
-                attentionPullRequests: attentionPullRequests,
-                showMyPRs: showMyPRs
+                attentionPullRequests: attentionPullRequests
             )
-            self.showMyPRs = showMyPRs
         }
 
         var displayMessage: String {
@@ -268,14 +266,12 @@ extension InteractiveSession {
                 visibleRows: visibleRows
             )
 
-            if showMyPRs {
-                Self.keepSelectionVisible(
-                    pullRequests: attentionPullRequests,
-                    selectedIndex: &attentionSelectedIndex,
-                    topIndex: &attentionTopIndex,
-                    visibleRows: visibleRows
-                )
-            }
+            Self.keepSelectionVisible(
+                pullRequests: attentionPullRequests,
+                selectedIndex: &attentionSelectedIndex,
+                topIndex: &attentionTopIndex,
+                visibleRows: visibleRows
+            )
         }
 
         mutating func moveUp() {
@@ -306,26 +302,32 @@ extension InteractiveSession {
             message = ""
         }
 
-        mutating func moveLeft(showMyPRs: Bool) {
+        mutating func moveLeft() {
             if focus == .reviewHeader {
                 focus = .filesHeader
             } else if focus == .filesHeader {
                 focus = .updatedHeader
-            } else if showMyPRs && focus == .attentionRow {
-                focus = pullRequests.isEmpty ? .reviewHeader : .mainRow
             }
             message = ""
         }
 
-        mutating func moveRight(showMyPRs: Bool) {
+        mutating func moveRight() {
             if focus == .updatedHeader {
                 focus = .filesHeader
             } else if focus == .filesHeader {
                 focus = .reviewHeader
-            } else if showMyPRs && !attentionPullRequests.isEmpty {
-                focus = .attentionRow
             }
             message = ""
+        }
+
+        mutating func toggleView() {
+            if focus == .attentionRow {
+                focus = pullRequests.isEmpty ? .updatedHeader : .mainRow
+                message = "Showing main PRs."
+            } else {
+                focus = .attentionRow
+                message = "Showing involves:@me PRs."
+            }
         }
 
         mutating func sortByNextUpdatedOrder() {
@@ -360,14 +362,12 @@ extension InteractiveSession {
 
         mutating func refresh(options: Options) throws {
             let selectedPRNumber = pullRequests.indices.contains(selectedIndex) ? pullRequests[selectedIndex].number : nil
-            let selectedAttentionPRNumber = options.showMyPRs && attentionPullRequests.indices.contains(attentionSelectedIndex)
+            let selectedAttentionPRNumber = attentionPullRequests.indices.contains(attentionSelectedIndex)
                 ? attentionPullRequests[attentionSelectedIndex].number
                 : nil
 
             basePullRequests = try GitHubClient.fetchMainPullRequests(options: options)
-            baseAttentionPullRequests = options.showMyPRs
-                ? try GitHubClient.fetchAttentionPullRequests(options: options)
-                : []
+            baseAttentionPullRequests = try GitHubClient.fetchAttentionPullRequests(options: options)
             updateFilteredPullRequests()
 
             selectedIndex = Self.updatedSelectionIndex(
@@ -380,15 +380,15 @@ extension InteractiveSession {
                 selectedNumber: selectedAttentionPRNumber,
                 pullRequests: attentionPullRequests
             )
-            updateFocusAfterRefresh(showMyPRs: options.showMyPRs)
+            updateFocusAfterRefresh()
             message = Self.fetchedMessage(
                 pullRequests: pullRequests,
-                attentionPullRequests: attentionPullRequests,
-                showMyPRs: options.showMyPRs
+                attentionPullRequests: attentionPullRequests
             )
         }
 
         mutating func previewTextFilter(_ query: String) {
+            let isAttentionView = focus == .attentionRow
             textFilter = query
             updateFilteredPullRequests()
             selectedIndex = 0
@@ -396,9 +396,11 @@ extension InteractiveSession {
             topIndex = 0
             attentionTopIndex = 0
 
-            if !pullRequests.isEmpty {
+            if isAttentionView {
+                focus = .attentionRow
+            } else if !pullRequests.isEmpty {
                 focus = .mainRow
-            } else if showMyPRs && !attentionPullRequests.isEmpty {
+            } else if !attentionPullRequests.isEmpty {
                 focus = .attentionRow
             } else {
                 focus = .updatedHeader
@@ -427,12 +429,8 @@ extension InteractiveSession {
             }
         }
 
-        private mutating func updateFocusAfterRefresh(showMyPRs: Bool) {
-            if showMyPRs && focus == .mainRow && pullRequests.isEmpty && !attentionPullRequests.isEmpty {
-                focus = .attentionRow
-            } else if showMyPRs && focus == .attentionRow && attentionPullRequests.isEmpty && !pullRequests.isEmpty {
-                focus = .mainRow
-            } else if pullRequests.isEmpty && (!showMyPRs || attentionPullRequests.isEmpty) {
+        private mutating func updateFocusAfterRefresh() {
+            if focus != .attentionRow && pullRequests.isEmpty {
                 focus = .updatedHeader
             }
         }
@@ -473,15 +471,9 @@ extension InteractiveSession {
 
         private static func fetchedMessage(
             pullRequests: [PullRequest],
-            attentionPullRequests: [PullRequest],
-            showMyPRs: Bool
+            attentionPullRequests: [PullRequest]
         ) -> String {
             let pullRequestText = "Fetched \(pullRequests.count) pull request\(pullRequests.count == 1 ? "" : "s")"
-
-            guard showMyPRs else {
-                return pullRequestText + "."
-            }
-
             return pullRequestText + " and \(attentionPullRequests.count) attention item\(attentionPullRequests.count == 1 ? "" : "s")."
         }
     }

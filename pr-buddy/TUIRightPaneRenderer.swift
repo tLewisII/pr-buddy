@@ -8,10 +8,6 @@
 import Foundation
 
 final class TUIRightPaneRenderer {
-    func paneWidth(for terminalWidth: Int) -> Int {
-        min(max(36, terminalWidth / 3), max(36, terminalWidth - 34))
-    }
-
     func tableRows(for pullRequests: [PullRequest]) -> [[String]] {
         pullRequests.map { pullRequest in
             [
@@ -32,7 +28,7 @@ final class TUIRightPaneRenderer {
     }
 
     func title(count: Int) -> String {
-        "My PRs (\(count))"
+        "involves:@me (\(count))"
     }
 
     func header(widths: [Int]) -> String {
@@ -47,38 +43,6 @@ final class TUIRightPaneRenderer {
         }
 
         return TUIFormat.inverted(">\(rendered.dropFirst())")
-    }
-
-    func line(
-        rows: [[String]],
-        widths: [Int],
-        index: Int,
-        selectedIndex: Int,
-        isPaneSelected: Bool,
-        visibleRows: Int,
-        paneWidth: Int
-    ) -> String {
-        if index < rows.count {
-            return row(
-                rows[index],
-                widths: widths,
-                isSelected: isPaneSelected && index == selectedIndex
-            )
-        }
-
-        guard rows.isEmpty else {
-            return ""
-        }
-
-        if index == centeredRowIndex(in: visibleRows) {
-            return centeredText("No Open PRs", width: paneWidth)
-        }
-
-        if index == centeredRowIndex(in: visibleRows) + 1 {
-            return centeredText("that involve you today", width: paneWidth)
-        }
-
-        return ""
     }
 
     private func renderCells(_ row: [String], widths: [Int]) -> String {
@@ -100,11 +64,4 @@ final class TUIRightPaneRenderer {
         TUIFormat.truncate(value, to: width)
     }
 
-    private func centeredRowIndex(in visibleRows: Int) -> Int {
-        max(0, visibleRows / 2)
-    }
-
-    private func centeredText(_ text: String, width: Int) -> String {
-        TUIFormat.centeredText(text, width: width)
-    }
 }

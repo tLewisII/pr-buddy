@@ -1,7 +1,9 @@
 import Darwin
+import Foundation
 
 private enum TerminalByte {
     case enter
+    case tab
     case escape
     case c
     case h
@@ -18,6 +20,8 @@ private enum TerminalByte {
     init(_ byte: UInt8) {
         if byte == 10 || byte == 13 {
             self = .enter
+        } else if byte == 9 {
+            self = .tab
         } else if byte == 27 {
             self = .escape
         } else if byte == 99 || byte == 67 {
@@ -81,6 +85,8 @@ func readKey() -> InputKey {
     switch TerminalByte(byte) {
     case .enter:
         return .enter
+    case .tab:
+        return .tab
     case .escape:
         var sequence = [UInt8](repeating: 0, count: 2)
 

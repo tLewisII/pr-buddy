@@ -11,8 +11,7 @@ final class PRBuddyTests: XCTestCase {
             "--status", "draft,approved",
             "--changed-files", "2..8",
             "--reviews", "1..3",
-            "--limit", "25",
-            "--show-my-prs"
+            "--limit", "25"
         ])
 
         XCTAssertEqual(options.repo, "owner/project")
@@ -24,13 +23,6 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(options.minReviews, 1)
         XCTAssertEqual(options.maxReviews, 3)
         XCTAssertEqual(options.limit, 25)
-        XCTAssertTrue(options.showMyPRs)
-    }
-
-    func testParseOptionsDoesNotShowMyPRsByDefault() throws {
-        let options = try PRBuddy.parseOptions([])
-
-        XCTAssertFalse(options.showMyPRs)
     }
 
 #if DEBUG
@@ -315,8 +307,7 @@ final class PRBuddyTests: XCTestCase {
             attentionPullRequests: [
                 makePullRequest(number: 3, title: "Review checkout errors"),
                 makePullRequest(number: 4, title: "Document parser behavior")
-            ],
-            showMyPRs: true
+            ]
         )
 
         state.applyTextFilter("checkout")
@@ -334,6 +325,39 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(state.pullRequests.map(\.number), [1, 2])
         XCTAssertEqual(state.attentionPullRequests.map(\.number), [3, 4])
         XCTAssertEqual(state.textFilter, "")
+    }
+
+    func testInteractiveSessionTogglesBetweenFullScreenViews() {
+        var state = InteractiveSession.State(
+            basePullRequests: [makePullRequest(number: 1)],
+            attentionPullRequests: [makePullRequest(number: 2)]
+        )
+
+        XCTAssertEqual(state.focus, .mainRow)
+        XCTAssertEqual(state.selectedPullRequest?.number, 1)
+
+        state.toggleView()
+
+        XCTAssertEqual(state.focus, .attentionRow)
+        XCTAssertEqual(state.selectedPullRequest?.number, 2)
+
+        state.toggleView()
+
+        XCTAssertEqual(state.focus, .mainRow)
+        XCTAssertEqual(state.selectedPullRequest?.number, 1)
+    }
+
+    func testFilteringKeepsAttentionViewSelectedWhenItBecomesEmpty() {
+        var state = InteractiveSession.State(
+            basePullRequests: [makePullRequest(number: 1, title: "Main match")],
+            attentionPullRequests: [makePullRequest(number: 2, title: "Attention item")]
+        )
+        state.toggleView()
+
+        state.applyTextFilter("Main match")
+
+        XCTAssertEqual(state.focus, .attentionRow)
+        XCTAssertTrue(state.attentionPullRequests.isEmpty)
     }
 
     func testFilterModeControlUClearsWithoutInterceptingC() {
@@ -849,11 +873,9 @@ final class PRBuddyTests: XCTestCase {
         }
     }
 
-    func testDualPanePullRequestListMatchesSnapshot() throws {
+    func testAttentionPullRequestListMatchesFullScreenSnapshot() throws {
         var options = Options()
         options.repo = "owner/project"
-        options.showMyPRs = true
-
         let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
             pullRequests: [
                 makePullRequest(number: 101, title: "Review dashboard keyboard navigation", labels: ["ui"]),
@@ -881,7 +903,7 @@ final class PRBuddyTests: XCTestCase {
             terminalHeight: 14
         )
 
-        try assertSnapshot(rendered, named: "dual-pane-pr-list.txt")
+        try assertSnapshot(rendered, named: "attention-pr-list.txt")
     }
 
     func testCommandRunnerDrainsLargeStdoutWithoutBlocking() throws {

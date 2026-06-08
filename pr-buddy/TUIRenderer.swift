@@ -182,7 +182,7 @@ final class TUIRenderer {
         let repoText = options.repo ?? "current repository"
         let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
 
-        guard options.showMyPRs else {
+        guard isAttentionPaneSelected else {
             return singlePanePullRequestListLines(
                 rows: rows,
                 headers: headers,
@@ -192,6 +192,7 @@ final class TUIRenderer {
                 isUpdatedHeaderSelected: isUpdatedHeaderSelected,
                 isFilesHeaderSelected: isFilesHeaderSelected,
                 isReviewHeaderSelected: isReviewHeaderSelected,
+                isMainPaneSelected: isMainPaneSelected,
                 repoText: repoText,
                 shownRange: shownRange,
                 message: message,
@@ -199,74 +200,15 @@ final class TUIRenderer {
             )
         }
 
-        let attentionPaneWidth = rightPaneRenderer.paneWidth(for: terminalWidth)
-        let leftPaneWidth = max(30, terminalWidth - attentionPaneWidth - 2)
-        let widths = columnWidths(
-            headers: headers,
-            rows: rows,
-            maximumWidths: mainPaneMaximumWidths(availableWidth: leftPaneWidth)
+        return attentionPullRequestListLines(
+            pullRequests: attentionPullRequests,
+            selectedIndex: attentionSelectedIndex,
+            topIndex: attentionTopIndex,
+            visibleRows: visibleRows,
+            repoText: repoText,
+            message: message,
+            terminalWidth: terminalWidth
         )
-        let attentionRows = rightPaneRenderer.tableRows(for: attentionPullRequests)
-        let attentionWidths = rightPaneRenderer.columnWidths(rows: attentionRows, availableWidth: attentionPaneWidth)
-        let attentionEndIndex = min(attentionRows.count, attentionTopIndex + visibleRows)
-        let attentionShownRange = attentionRows.isEmpty ? "0 of 0" : "\(attentionTopIndex + 1)-\(attentionEndIndex) of \(attentionRows.count)"
-        let attentionHeader = attentionRows.isEmpty ? "" : rightPaneRenderer.title(count: attentionRows.count)
-        let attentionColumnHeader = attentionRows.isEmpty ? "" : rightPaneRenderer.header(widths: attentionWidths)
-
-        var lines = [
-            "pr-buddy  \(repoText)",
-            "Main \(shownRange)  My PRs \(attentionShownRange)  / filter  hjkl/arrows  enter/v view  c checkout  o web  r refresh  q",
-            message.isEmpty ? " " : message,
-            "",
-            joinPaneLines(
-                left: "  " + renderHeaderRow(
-                    headers,
-                    widths: widths,
-                    isUpdatedHeaderSelected: isUpdatedHeaderSelected,
-                    isFilesHeaderSelected: isFilesHeaderSelected,
-                    isReviewHeaderSelected: isReviewHeaderSelected
-                ),
-                right: attentionHeader,
-                leftWidth: leftPaneWidth
-            ),
-            joinPaneLines(
-                left: "  " + widths.map { String(repeating: "-", count: $0) }.joined(separator: "  "),
-                right: attentionColumnHeader,
-                leftWidth: leftPaneWidth
-            )
-        ]
-
-        for offset in 0..<visibleRows {
-            let mainIndex = topIndex + offset
-            let attentionIndex = attentionTopIndex + offset
-            let left: String
-            let right: String
-
-            if mainIndex < rows.count {
-                let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isMainPaneSelected && mainIndex == selectedIndex
-                let marker = isSelectedRow ? ">" : " "
-                let rendered = "\(marker) " + renderRow(rows[mainIndex], widths: widths)
-                left = isSelectedRow ? TUIFormat.inverted(rendered) : rendered
-            } else if rows.isEmpty && offset == 0 {
-                left = "  No pull requests matched the current filters."
-            } else {
-                left = ""
-            }
-
-            right = rightPaneRenderer.line(
-                rows: attentionRows,
-                widths: attentionWidths,
-                index: attentionIndex,
-                selectedIndex: attentionSelectedIndex,
-                isPaneSelected: isAttentionPaneSelected,
-                visibleRows: visibleRows,
-                paneWidth: attentionPaneWidth
-            )
-
-            lines.append(joinPaneLines(left: left, right: right, leftWidth: leftPaneWidth))
-        }
-
-        return lines.map { clippedLine($0, to: terminalWidth) }
     }
 
     private func singlePanePullRequestListLines(
@@ -278,6 +220,7 @@ final class TUIRenderer {
         isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool,
+        isMainPaneSelected: Bool,
         repoText: String,
         shownRange: String,
         message: String,
@@ -291,7 +234,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange)  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q",
+            "Showing \(shownRange)  tab switch  / filter  arrows/jk  enter/v view  c checkout  o web  r refresh  q",
             message.isEmpty ? " " : message,
             "",
             "  " + renderHeaderRow(
@@ -310,7 +253,7 @@ final class TUIRenderer {
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && index == selectedIndex
+            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isMainPaneSelected && index == selectedIndex
             let marker = isSelectedRow ? ">" : " "
             let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
 
@@ -319,6 +262,41 @@ final class TUIRenderer {
             } else {
                 lines.append(rendered)
             }
+        }
+
+        return lines.map { clippedLine($0, to: terminalWidth) }
+    }
+
+    private func attentionPullRequestListLines(
+        pullRequests: [PullRequest],
+        selectedIndex: Int,
+        topIndex: Int,
+        visibleRows: Int,
+        repoText: String,
+        message: String,
+        terminalWidth: Int
+    ) -> [String] {
+        let rows = rightPaneRenderer.tableRows(for: pullRequests)
+        let widths = rightPaneRenderer.columnWidths(rows: rows, availableWidth: max(20, terminalWidth - 2))
+        let endIndex = min(rows.count, topIndex + visibleRows)
+        let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
+
+        var lines = [
+            "pr-buddy  \(repoText)",
+            "involves:@me \(shownRange)  tab main  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q",
+            message.isEmpty ? " " : message,
+            "",
+            "  " + rightPaneRenderer.title(count: rows.count),
+            "  " + rightPaneRenderer.header(widths: widths)
+        ]
+
+        if rows.isEmpty {
+            lines.append("  No open pull requests involve you.")
+            return lines.map { clippedLine($0, to: terminalWidth) }
+        }
+
+        for index in topIndex..<min(rows.count, topIndex + visibleRows) {
+            lines.append(rightPaneRenderer.row(rows[index], widths: widths, isSelected: index == selectedIndex))
         }
 
         return lines.map { clippedLine($0, to: terminalWidth) }
@@ -622,11 +600,6 @@ final class TUIRenderer {
         }
 
         return widths
-    }
-
-    private func joinPaneLines(left: String, right: String, leftWidth: Int) -> String {
-        let clippedLeft = TUIFormat.clipped(left, to: leftWidth)
-        return clippedLeft + String(repeating: " ", count: max(1, leftWidth - TUIFormat.visibleLength(clippedLeft) + 1)) + right
     }
 
     private func clippedLine(_ line: String, to terminalWidth: Int) -> String {
