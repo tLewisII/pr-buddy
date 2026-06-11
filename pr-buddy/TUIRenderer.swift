@@ -240,10 +240,10 @@ final class TUIRenderer {
         message: String,
         terminalWidth: Int
     ) -> [String] {
-        let widths = columnWidths(
+        let widths = mainViewColumnWidths(
             headers: headers,
             rows: rows,
-            maximumWidths: mainViewMaximumWidths(availableWidth: terminalWidth)
+            availableWidth: terminalWidth
         )
 
         var lines = [
@@ -596,20 +596,30 @@ final class TUIRenderer {
         max(1, terminalHeight - 8)
     }
 
-    private func mainViewMaximumWidths(availableWidth: Int) -> [Int] {
-        var widths = [9, 9, 8, 12, 12, 24, 12]
+    private func mainViewColumnWidths(
+        headers: [String],
+        rows: [[String]],
+        availableWidth: Int
+    ) -> [Int] {
         let minimumWidths = [9, 5, 4, 8, 6, 5, 6]
-        let separatorWidth = (widths.count - 1) * 2 + 2
+        let separatorWidth = (headers.count - 1) * 2 + 2
+        var responsiveMaximumWidths = maximumWidths
+        responsiveMaximumWidths[5] = max(
+            responsiveMaximumWidths[5],
+            availableWidth - separatorWidth
+        )
+        var widths = columnWidths(
+            headers: headers,
+            rows: rows,
+            maximumWidths: responsiveMaximumWidths
+        )
         var overflow = widths.reduce(0, +) + separatorWidth - availableWidth
 
         for column in [5, 4, 6, 3, 1, 2, 0] where overflow > 0 {
-            let shrinkAmount = min(overflow, widths[column] - minimumWidths[column])
+            let minimumWidth = min(widths[column], minimumWidths[column])
+            let shrinkAmount = min(overflow, widths[column] - minimumWidth)
             widths[column] -= shrinkAmount
             overflow -= shrinkAmount
-        }
-
-        if overflow < 0 {
-            widths[5] += min(maximumWidths[5] - widths[5], abs(overflow))
         }
 
         return widths

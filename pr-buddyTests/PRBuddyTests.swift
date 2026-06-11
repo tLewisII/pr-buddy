@@ -873,6 +873,44 @@ final class PRBuddyTests: XCTestCase {
         }
     }
 
+    func testMainPullRequestListUsesAvailableWidthBeforeTruncatingColumns() {
+        let title = "Add a wide integer fast path for addition and subtraction without truncating useful context"
+        let pullRequest = makePullRequest(
+            title: title,
+            author: PullRequest.Author(login: "long-contributor-name"),
+            changedFiles: 1234,
+            additions: 56789,
+            deletions: 43210,
+            labels: ["awaiting review", "tests"]
+        )
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [pullRequest],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainViewSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionViewSelected: false,
+            options: Options(),
+            message: "",
+            terminalWidth: 213,
+            terminalHeight: 14
+        )
+
+        XCTAssertTrue(rendered.contains("+56789"))
+        XCTAssertTrue(rendered.contains("-43210"))
+        XCTAssertTrue(rendered.contains("awaiting review, tests"))
+        XCTAssertTrue(rendered.contains(title))
+        XCTAssertTrue(rendered.contains("long-contributor-name"))
+    }
+
     func testSearchInputBarIsAnchoredToBottomAndClippedToTerminalWidth() {
         let terminalWidth = 48
         let terminalHeight = 14
