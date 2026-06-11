@@ -298,7 +298,7 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertFalse(PullRequestFilter.matchesTextQuery(pullRequest, query: "files:invalid"))
     }
 
-    func testInteractiveTextFilterAppliesToBothPanesAndCanBeCleared() {
+    func testInteractiveTextFilterAppliesToBothViewsAndCanBeCleared() {
         var state = InteractiveSession.State(
             basePullRequests: [
                 makePullRequest(number: 1, title: "Fix checkout flow"),
@@ -625,14 +625,14 @@ final class PRBuddyTests: XCTestCase {
 
     func testAttentionTableRowsShowOnlyStatusAndTitle() {
         let pullRequest = makePullRequest(
-            title: "Review the right pane",
+            title: "Review the attention view",
             state: "OPEN",
             isDraft: false
         )
 
         let rows = TUIRenderer().attentionTableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows, [["Review the right pane", "open"]])
+        XCTAssertEqual(rows, [["Review the attention view", "open"]])
     }
 
     func testHeadersShowFileSortState() {
@@ -793,7 +793,7 @@ final class PRBuddyTests: XCTestCase {
         )
     }
 
-    func testSinglePanePullRequestListMatchesSnapshot() throws {
+    func testMainPullRequestListMatchesSnapshot() throws {
         var options = Options()
         options.repo = "owner/project"
 
@@ -819,24 +819,24 @@ final class PRBuddyTests: XCTestCase {
             isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: false,
             isReviewHeaderSelected: false,
-            isMainPaneSelected: true,
+            isMainViewSelected: true,
             updatedSortOrder: .none,
             fileSortOrder: .descending,
             reviewSortOrder: .none,
             attentionPullRequests: [],
             attentionSelectedIndex: 0,
             attentionTopIndex: 0,
-            isAttentionPaneSelected: false,
+            isAttentionViewSelected: false,
             options: options,
             message: "Sorted by most files first.",
             terminalWidth: 100,
             terminalHeight: 14
         )
 
-        try assertSnapshot(rendered, named: "single-pane-pr-list.txt")
+        try assertSnapshot(rendered, named: "main-view-pr-list.txt")
     }
 
-    func testSinglePanePullRequestListFitsTerminalWidth() {
+    func testMainPullRequestListFitsTerminalWidth() {
         var options = Options()
         options.repo = "owner/project-with-a-long-name"
 
@@ -854,14 +854,14 @@ final class PRBuddyTests: XCTestCase {
             isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: false,
             isReviewHeaderSelected: false,
-            isMainPaneSelected: true,
+            isMainViewSelected: true,
             updatedSortOrder: .none,
             fileSortOrder: .none,
             reviewSortOrder: .none,
             attentionPullRequests: [],
             attentionSelectedIndex: 0,
             attentionTopIndex: 0,
-            isAttentionPaneSelected: false,
+            isAttentionViewSelected: false,
             options: options,
             message: "A status message that is intentionally longer than the terminal width so it must be clipped.",
             terminalWidth: terminalWidth,
@@ -883,14 +883,14 @@ final class PRBuddyTests: XCTestCase {
             isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: false,
             isReviewHeaderSelected: false,
-            isMainPaneSelected: true,
+            isMainViewSelected: true,
             updatedSortOrder: .none,
             fileSortOrder: .none,
             reviewSortOrder: .none,
             attentionPullRequests: [],
             attentionSelectedIndex: 0,
             attentionTopIndex: 0,
-            isAttentionPaneSelected: false,
+            isAttentionViewSelected: false,
             options: Options(),
             message: "",
             inputBar: "Filter: needs-review_  enter apply  ctrl-u clear  esc cancel  backspace edit",
@@ -918,7 +918,7 @@ final class PRBuddyTests: XCTestCase {
             isUpdatedHeaderSelected: false,
             isFilesHeaderSelected: false,
             isReviewHeaderSelected: false,
-            isMainPaneSelected: false,
+            isMainViewSelected: false,
             updatedSortOrder: .none,
             fileSortOrder: .none,
             reviewSortOrder: .none,
@@ -928,7 +928,7 @@ final class PRBuddyTests: XCTestCase {
             ],
             attentionSelectedIndex: 1,
             attentionTopIndex: 0,
-            isAttentionPaneSelected: true,
+            isAttentionViewSelected: true,
             options: options,
             message: "",
             terminalWidth: 100,

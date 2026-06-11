@@ -40,8 +40,8 @@ final class TUIRenderer {
         }
     }
 
-    private let rightPaneRenderer = TUIRightPaneRenderer()
     private let headers = ["Updated  ", "Files", "Status", "Review  ", "Labels", "Title", "Author"]
+    private let attentionHeaders = ["Title", "Status"]
     private let maximumWidths = [9, 18, 8, 18, 24, 72, 24]
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
@@ -74,14 +74,14 @@ final class TUIRenderer {
         isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool,
-        isMainPaneSelected: Bool,
+        isMainViewSelected: Bool,
         updatedSortOrder: UpdatedSortOrder,
         fileSortOrder: FileSortOrder,
         reviewSortOrder: ReviewSortOrder,
         attentionPullRequests: [PullRequest],
         attentionSelectedIndex: Int,
         attentionTopIndex: Int,
-        isAttentionPaneSelected: Bool,
+        isAttentionViewSelected: Bool,
         options: Options,
         message: String,
         inputBar: String? = nil
@@ -93,14 +93,14 @@ final class TUIRenderer {
             isUpdatedHeaderSelected: isUpdatedHeaderSelected,
             isFilesHeaderSelected: isFilesHeaderSelected,
             isReviewHeaderSelected: isReviewHeaderSelected,
-            isMainPaneSelected: isMainPaneSelected,
+            isMainViewSelected: isMainViewSelected,
             updatedSortOrder: updatedSortOrder,
             fileSortOrder: fileSortOrder,
             reviewSortOrder: reviewSortOrder,
             attentionPullRequests: attentionPullRequests,
             attentionSelectedIndex: attentionSelectedIndex,
             attentionTopIndex: attentionTopIndex,
-            isAttentionPaneSelected: isAttentionPaneSelected,
+            isAttentionViewSelected: isAttentionViewSelected,
             options: options,
             message: message,
             inputBar: inputBar,
@@ -118,14 +118,14 @@ final class TUIRenderer {
         isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool,
-        isMainPaneSelected: Bool,
+        isMainViewSelected: Bool,
         updatedSortOrder: UpdatedSortOrder,
         fileSortOrder: FileSortOrder,
         reviewSortOrder: ReviewSortOrder,
         attentionPullRequests: [PullRequest],
         attentionSelectedIndex: Int,
         attentionTopIndex: Int,
-        isAttentionPaneSelected: Bool,
+        isAttentionViewSelected: Bool,
         options: Options,
         message: String,
         inputBar: String? = nil,
@@ -139,14 +139,14 @@ final class TUIRenderer {
             isUpdatedHeaderSelected: isUpdatedHeaderSelected,
             isFilesHeaderSelected: isFilesHeaderSelected,
             isReviewHeaderSelected: isReviewHeaderSelected,
-            isMainPaneSelected: isMainPaneSelected,
+            isMainViewSelected: isMainViewSelected,
             updatedSortOrder: updatedSortOrder,
             fileSortOrder: fileSortOrder,
             reviewSortOrder: reviewSortOrder,
             attentionPullRequests: attentionPullRequests,
             attentionSelectedIndex: attentionSelectedIndex,
             attentionTopIndex: attentionTopIndex,
-            isAttentionPaneSelected: isAttentionPaneSelected,
+            isAttentionViewSelected: isAttentionViewSelected,
             options: options,
             message: message,
             inputBar: inputBar,
@@ -162,14 +162,14 @@ final class TUIRenderer {
         isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool,
-        isMainPaneSelected: Bool,
+        isMainViewSelected: Bool,
         updatedSortOrder: UpdatedSortOrder,
         fileSortOrder: FileSortOrder,
         reviewSortOrder: ReviewSortOrder,
         attentionPullRequests: [PullRequest],
         attentionSelectedIndex: Int,
         attentionTopIndex: Int,
-        isAttentionPaneSelected: Bool,
+        isAttentionViewSelected: Bool,
         options: Options,
         message: String,
         inputBar: String?,
@@ -189,7 +189,7 @@ final class TUIRenderer {
 
         let lines: [String]
 
-        if isAttentionPaneSelected {
+        if isAttentionViewSelected {
             lines = attentionPullRequestListLines(
                 pullRequests: attentionPullRequests,
                 selectedIndex: attentionSelectedIndex,
@@ -200,7 +200,7 @@ final class TUIRenderer {
                 terminalWidth: terminalWidth
             )
         } else {
-            lines = singlePanePullRequestListLines(
+            lines = mainPullRequestListLines(
                 rows: rows,
                 headers: headers,
                 selectedIndex: selectedIndex,
@@ -209,7 +209,7 @@ final class TUIRenderer {
                 isUpdatedHeaderSelected: isUpdatedHeaderSelected,
                 isFilesHeaderSelected: isFilesHeaderSelected,
                 isReviewHeaderSelected: isReviewHeaderSelected,
-                isMainPaneSelected: isMainPaneSelected,
+                isMainViewSelected: isMainViewSelected,
                 repoText: repoText,
                 shownRange: shownRange,
                 message: message,
@@ -225,7 +225,7 @@ final class TUIRenderer {
         )
     }
 
-    private func singlePanePullRequestListLines(
+    private func mainPullRequestListLines(
         rows: [[String]],
         headers: [String],
         selectedIndex: Int,
@@ -234,7 +234,7 @@ final class TUIRenderer {
         isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool,
-        isMainPaneSelected: Bool,
+        isMainViewSelected: Bool,
         repoText: String,
         shownRange: String,
         message: String,
@@ -243,7 +243,7 @@ final class TUIRenderer {
         let widths = columnWidths(
             headers: headers,
             rows: rows,
-            maximumWidths: mainPaneMaximumWidths(availableWidth: terminalWidth)
+            maximumWidths: mainViewMaximumWidths(availableWidth: terminalWidth)
         )
 
         var lines = [
@@ -267,7 +267,7 @@ final class TUIRenderer {
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isMainPaneSelected && index == selectedIndex
+            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isMainViewSelected && index == selectedIndex
             let marker = isSelectedRow ? ">" : " "
             let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
 
@@ -290,8 +290,8 @@ final class TUIRenderer {
         message: String,
         terminalWidth: Int
     ) -> [String] {
-        let rows = rightPaneRenderer.tableRows(for: pullRequests)
-        let widths = rightPaneRenderer.columnWidths(rows: rows, availableWidth: max(20, terminalWidth - 2))
+        let rows = attentionTableRows(for: pullRequests)
+        let widths = attentionColumnWidths(rows: rows, availableWidth: max(20, terminalWidth - 2))
         let endIndex = min(rows.count, topIndex + visibleRows)
         let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
 
@@ -300,8 +300,8 @@ final class TUIRenderer {
             "involves:@me \(shownRange)  tab main  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q",
             message.isEmpty ? " " : message,
             "",
-            "  " + rightPaneRenderer.title(count: rows.count),
-            "  " + rightPaneRenderer.header(widths: widths)
+            "  involves:@me (\(rows.count))",
+            "  " + renderAttentionCells(attentionHeaders, widths: widths)
         ]
 
         if rows.isEmpty {
@@ -310,7 +310,13 @@ final class TUIRenderer {
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            lines.append(rightPaneRenderer.row(rows[index], widths: widths, isSelected: index == selectedIndex))
+            let rendered = "  " + renderAttentionCells(rows[index], widths: widths)
+
+            if index == selectedIndex {
+                lines.append(TUIFormat.inverted(">\(rendered.dropFirst())"))
+            } else {
+                lines.append(rendered)
+            }
         }
 
         return lines.map { clippedLine($0, to: terminalWidth) }
@@ -389,7 +395,12 @@ final class TUIRenderer {
     }
 
     func attentionTableRows(for pullRequests: [PullRequest]) -> [[String]] {
-        rightPaneRenderer.tableRows(for: pullRequests)
+        pullRequests.map { pullRequest in
+            [
+                pullRequest.title,
+                pullRequest.statusSummary
+            ]
+        }
     }
 
     func fileSummary(for pullRequest: PullRequest) -> String {
@@ -416,10 +427,6 @@ final class TUIRenderer {
 
     private func columnWidths(headers: [String], rows: [[String]], maximumWidths: [Int]) -> [Int] {
         TUIFormat.columnWidths(headers: headers, rows: rows, maximumWidths: maximumWidths)
-    }
-
-    func attentionColumnWidths(rows: [[String]]) -> [Int] {
-        rightPaneRenderer.columnWidths(rows: rows, availableWidth: max(36, terminalWidth() / 3))
     }
 
     func renderRow(_ row: [String], widths: [Int]) -> String {
@@ -510,14 +517,6 @@ final class TUIRenderer {
             .joined(separator: "  ")
     }
 
-    func renderAttentionHeader(widths: [Int]) -> String {
-        rightPaneRenderer.header(widths: widths)
-    }
-
-    func renderAttentionRow(_ row: [String], widths: [Int], isSelected: Bool) -> String {
-        rightPaneRenderer.row(row, widths: widths, isSelected: isSelected)
-    }
-
     func colorizedStatus(_ value: String) -> String {
         TUIFormat.colorizedStatus(value)
     }
@@ -597,7 +596,7 @@ final class TUIRenderer {
         max(1, terminalHeight - 8)
     }
 
-    private func mainPaneMaximumWidths(availableWidth: Int) -> [Int] {
+    private func mainViewMaximumWidths(availableWidth: Int) -> [Int] {
         var widths = [9, 9, 8, 12, 12, 24, 12]
         let minimumWidths = [9, 5, 4, 8, 6, 5, 6]
         let separatorWidth = (widths.count - 1) * 2 + 2
@@ -614,6 +613,21 @@ final class TUIRenderer {
         }
 
         return widths
+    }
+
+    private func attentionColumnWidths(rows: [[String]], availableWidth: Int) -> [Int] {
+        let maximumWidths = [max(16, availableWidth - 10), 8]
+        return columnWidths(headers: attentionHeaders, rows: rows, maximumWidths: maximumWidths)
+    }
+
+    private func renderAttentionCells(_ row: [String], widths: [Int]) -> String {
+        row.enumerated()
+            .map { column, value in
+                let text = truncate(value, to: widths[column])
+                let paddedText = TUIFormat.padded(text, to: widths[column])
+                return column == 1 ? colorizedStatus(paddedText) : paddedText
+            }
+            .joined(separator: "  ")
     }
 
     private func clippedLine(_ line: String, to terminalWidth: Int) -> String {
