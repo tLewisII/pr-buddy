@@ -270,35 +270,6 @@ enum AppError: Error, CustomStringConvertible {
     }
 }
 
-enum InputKey {
-    case up
-    case down
-    case left
-    case right
-    case enter
-    case h
-    case j
-    case k
-    case l
-    case v
-    case c
-    case o
-    case r
-    case q
-    case tab
-    case search
-    case unknown
-}
-
-enum SearchInput: Equatable {
-    case character(Character)
-    case backspace
-    case submit
-    case cancel
-    case clear
-    case unknown
-}
-
 struct CommandResult {
     let exitCode: Int32
     let stdoutData: Data

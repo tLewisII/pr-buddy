@@ -6,177 +6,252 @@ enum InteractiveSession {
         initialAttentionPullRequests: [PullRequest],
         options: Options
     ) throws {
-        let terminalMode = try RawTerminalMode()
+        let eventReader = try TerminalEventReader()
+        let terminalSession = try TerminalSession()
         let renderer = TUIRenderer()
         defer {
-            terminalMode.restore()
-            renderer.showCursor()
-            renderer.clearScreen()
+            terminalSession.restore()
+            eventReader.close()
         }
 
         var state = State(
             basePullRequests: initialPullRequests,
             attentionPullRequests: initialAttentionPullRequests
         )
-
-        renderer.hideCursor()
+        var terminalSize = TerminalSize.current()
+        var forceRedraw = true
 
         while true {
-            state.keepSelectionsVisible(visibleRows: renderer.visibleListRows())
-            renderer.drawPullRequestList(
-                pullRequests: state.pullRequests,
-                selectedIndex: state.selectedIndex,
-                topIndex: state.topIndex,
-                isUpdatedHeaderSelected: state.focus == .updatedHeader,
-                isFilesHeaderSelected: state.focus == .filesHeader,
-                isReviewHeaderSelected: state.focus == .reviewHeader,
-                isMainViewSelected: state.focus == .mainRow,
-                updatedSortOrder: state.updatedSortOrder,
-                fileSortOrder: state.fileSortOrder,
-                reviewSortOrder: state.reviewSortOrder,
-                attentionPullRequests: state.attentionPullRequests,
-                attentionSelectedIndex: state.attentionSelectedIndex,
-                attentionTopIndex: state.attentionTopIndex,
-                isAttentionViewSelected: state.focus == .attentionRow,
-                options: options,
-                message: state.displayMessage
+            state.keepSelectionsVisible(
+                visibleRows: renderer.visibleListRows(terminalHeight: terminalSize.rows)
             )
+            draw(
+                state: state,
+                renderer: renderer,
+                options: options,
+                terminalSize: terminalSize,
+                forceRedraw: forceRedraw
+            )
+            forceRedraw = false
 
-            switch readKey() {
-            case .up, .k:
-                state.moveUp()
-            case .down, .j:
-                state.moveDown()
-            case .left, .h:
-                state.moveLeft()
-            case .right, .l:
-                state.moveRight()
-            case .enter:
-                if try handleEnter(state: &state, renderer: renderer, options: options) {
-                    continue
-                }
-            case .v:
-                try viewSelectedPullRequest(state: &state, renderer: renderer, options: options)
-            case .c:
-                try checkoutSelectedPullRequest(state: &state, renderer: renderer, options: options)
-            case .o:
-                try openSelectedPullRequest(state: &state, options: options)
-            case .r:
-                try state.refresh(options: options)
-            case .tab:
-                state.toggleView()
-            case .q:
+            switch eventReader.nextEvent() {
+            case .resize(let size):
+                terminalSize = size
+                renderer.invalidateScreen()
+                forceRedraw = true
+            case .interrupt, .endOfInput:
                 return
-            case .search:
-                editTextFilter(state: &state, renderer: renderer, options: options)
-            case .unknown:
+            case .key(.up):
+                state.moveUp()
+            case .key(.down):
+                state.moveDown()
+            case .key(.left):
+                state.moveLeft()
+            case .key(.right):
+                state.moveRight()
+            case .key(.enter):
+                if state.focus == .updatedHeader {
+                    state.sortByNextUpdatedOrder()
+                } else if state.focus == .filesHeader {
+                    state.sortByNextFileOrder()
+                } else if state.focus == .reviewHeader {
+                    state.sortByNextReviewOrder()
+                } else if try viewSelectedPullRequest(
+                    state: &state,
+                    renderer: renderer,
+                    eventReader: eventReader,
+                    terminalSize: &terminalSize,
+                    options: options
+                ) {
+                    return
+                }
+            case .key(.tab):
+                state.toggleView()
+            case .key(.character(let character)):
+                if try handleCharacter(
+                    character,
+                    state: &state,
+                    renderer: renderer,
+                    eventReader: eventReader,
+                    terminalSize: &terminalSize,
+                    options: options
+                ) {
+                    return
+                }
+            case .key(.interrupt):
+                return
+            case .key(.escape), .key(.backspace), .key(.clear):
+                continue
+            case .key(.unknown):
                 state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
             }
         }
     }
 
-    private static func editTextFilter(state: inout State, renderer: TUIRenderer, options: Options) {
+    private static func handleCharacter(
+        _ character: Character,
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: Options
+    ) throws -> Bool {
+        switch String(character).lowercased() {
+        case "h":
+            state.moveLeft()
+        case "j":
+            state.moveDown()
+        case "k":
+            state.moveUp()
+        case "l":
+            state.moveRight()
+        case "v":
+            return try viewSelectedPullRequest(
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: options
+            )
+        case "c":
+            return try checkoutSelectedPullRequest(
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: options
+            )
+        case "o":
+            try openSelectedPullRequest(state: &state, options: options)
+        case "r":
+            try state.refresh(options: options)
+        case "q":
+            return true
+        case "/":
+            return editTextFilter(
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: options
+            )
+        default:
+            state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+        }
+
+        return false
+    }
+
+    private static func editTextFilter(
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: Options
+    ) -> Bool {
         let originalQuery = state.textFilter
         var query = originalQuery
 
         while true {
             state.previewTextFilter(query)
-            state.keepSelectionsVisible(visibleRows: renderer.visibleListRows())
-            renderer.drawPullRequestList(
-                pullRequests: state.pullRequests,
-                selectedIndex: state.selectedIndex,
-                topIndex: state.topIndex,
-                isUpdatedHeaderSelected: state.focus == .updatedHeader,
-                isFilesHeaderSelected: state.focus == .filesHeader,
-                isReviewHeaderSelected: state.focus == .reviewHeader,
-                isMainViewSelected: state.focus == .mainRow,
-                updatedSortOrder: state.updatedSortOrder,
-                fileSortOrder: state.fileSortOrder,
-                reviewSortOrder: state.reviewSortOrder,
-                attentionPullRequests: state.attentionPullRequests,
-                attentionSelectedIndex: state.attentionSelectedIndex,
-                attentionTopIndex: state.attentionTopIndex,
-                isAttentionViewSelected: state.focus == .attentionRow,
+            state.keepSelectionsVisible(
+                visibleRows: renderer.visibleListRows(terminalHeight: terminalSize.rows)
+            )
+            draw(
+                state: state,
+                renderer: renderer,
                 options: options,
+                terminalSize: terminalSize,
                 message: "",
                 inputBar: "Filter: \(query)_  enter apply  ctrl-u clear  esc cancel  backspace edit"
             )
 
-            switch readSearchInput() {
-            case .character(let character):
+            switch eventReader.nextEvent() {
+            case .resize(let size):
+                terminalSize = size
+                renderer.invalidateScreen()
+            case .interrupt, .endOfInput, .key(.interrupt):
+                return true
+            case .key(.character(let character)):
                 query.append(character)
-            case .backspace:
+            case .key(.backspace):
                 if !query.isEmpty {
                     query.removeLast()
                 }
-            case .submit:
+            case .key(.enter):
                 state.applyTextFilter(query)
-                return
-            case .cancel:
+                return false
+            case .key(.escape):
                 state.applyTextFilter(originalQuery)
                 state.message = originalQuery.isEmpty ? "Filter cancelled." : "Filter unchanged."
-                return
-            case .clear:
+                return false
+            case .key(.clear):
                 state.applyTextFilter("")
-                return
-            case .unknown:
+                return false
+            case .key:
                 continue
             }
         }
     }
 
-    private static func handleEnter(state: inout State, renderer: TUIRenderer, options: Options) throws -> Bool {
-        if state.focus == .updatedHeader {
-            state.sortByNextUpdatedOrder()
-            return true
-        } else if state.focus == .filesHeader {
-            state.sortByNextFileOrder()
-            return true
-        } else if state.focus == .reviewHeader {
-            state.sortByNextReviewOrder()
-            return true
-        }
-
-        try viewSelectedPullRequest(state: &state, renderer: renderer, options: options)
-        return false
-    }
-
-    private static func viewSelectedPullRequest(state: inout State, renderer: TUIRenderer, options: Options) throws {
+    private static func viewSelectedPullRequest(
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: Options
+    ) throws -> Bool {
         guard !state.focus.isSortableHeader else {
             state.message = "Press enter on the Updated, Files, or Review header to change sorting."
-            return
+            return false
         }
 
         guard let selectedPullRequest = state.selectedPullRequest else {
             state.message = "No pull requests to view."
-            return
+            return false
         }
 
         renderer.drawCommandResult(
             title: "PR #\(selectedPullRequest.number)",
             result: try GitHubClient.runPRCommand(["view", String(selectedPullRequest.number)], options: options)
         )
-        _ = readKey()
+        let shouldExit = waitForDismissal(
+            eventReader: eventReader,
+            renderer: renderer,
+            terminalSize: &terminalSize
+        )
         state.message = "Returned from details."
+        return shouldExit
     }
 
-    private static func checkoutSelectedPullRequest(state: inout State, renderer: TUIRenderer, options: Options) throws {
+    private static func checkoutSelectedPullRequest(
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: Options
+    ) throws -> Bool {
         guard !state.focus.isSortableHeader else {
             state.message = "Move to a pull request before checking out."
-            return
+            return false
         }
 
         guard let selectedPullRequest = state.selectedPullRequest else {
             state.message = "No pull requests to checkout."
-            return
+            return false
         }
 
         renderer.drawCommandResult(
             title: "Checkout #\(selectedPullRequest.number)",
             result: try GitHubClient.runPRCommand(["checkout", String(selectedPullRequest.number)], options: options)
         )
-        _ = readKey()
+        let shouldExit = waitForDismissal(
+            eventReader: eventReader,
+            renderer: renderer,
+            terminalSize: &terminalSize
+        )
         state.message = "Checkout command finished."
+        return shouldExit
     }
 
     private static func openSelectedPullRequest(state: inout State, options: Options) throws {
@@ -192,6 +267,56 @@ enum InteractiveSession {
 
         let result = try GitHubClient.runPRCommand(["view", String(selectedPullRequest.number), "--web"], options: options)
         state.message = result.exitCode == 0 ? "Opened #\(selectedPullRequest.number) in browser." : result.stderr
+    }
+
+    private static func waitForDismissal(
+        eventReader: TerminalEventReader,
+        renderer: TUIRenderer,
+        terminalSize: inout TerminalSize
+    ) -> Bool {
+        while true {
+            switch eventReader.nextEvent() {
+            case .resize(let size):
+                terminalSize = size
+            case .interrupt, .endOfInput, .key(.interrupt):
+                return true
+            case .key:
+                renderer.invalidateScreen()
+                return false
+            }
+        }
+    }
+
+    private static func draw(
+        state: State,
+        renderer: TUIRenderer,
+        options: Options,
+        terminalSize: TerminalSize,
+        message: String? = nil,
+        inputBar: String? = nil,
+        forceRedraw: Bool = false
+    ) {
+        renderer.drawPullRequestList(
+            pullRequests: state.pullRequests,
+            selectedIndex: state.selectedIndex,
+            topIndex: state.topIndex,
+            isUpdatedHeaderSelected: state.focus == .updatedHeader,
+            isFilesHeaderSelected: state.focus == .filesHeader,
+            isReviewHeaderSelected: state.focus == .reviewHeader,
+            isMainViewSelected: state.focus == .mainRow,
+            updatedSortOrder: state.updatedSortOrder,
+            fileSortOrder: state.fileSortOrder,
+            reviewSortOrder: state.reviewSortOrder,
+            attentionPullRequests: state.attentionPullRequests,
+            attentionSelectedIndex: state.attentionSelectedIndex,
+            attentionTopIndex: state.attentionTopIndex,
+            isAttentionViewSelected: state.focus == .attentionRow,
+            options: options,
+            message: message ?? state.displayMessage,
+            inputBar: inputBar,
+            terminalSize: terminalSize,
+            forceRedraw: forceRedraw
+        )
     }
 }
 

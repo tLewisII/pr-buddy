@@ -360,11 +360,83 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertTrue(state.attentionPullRequests.isEmpty)
     }
 
-    func testFilterModeControlUClearsWithoutInterceptingC() {
-        XCTAssertEqual(searchControlInput(for: 21), .clear)
-        XCTAssertNil(searchControlInput(for: 99))
-        XCTAssertNil(searchControlInput(for: 67))
-        XCTAssertNil(searchControlInput(for: 120))
+    func testTerminalInputDecoderHandlesControlAndCharacterKeys() {
+        var decoder = TerminalInputDecoder()
+
+        XCTAssertEqual(
+            decoder.feed([21, 99, 67, 120]),
+            [.clear, .character("c"), .character("C"), .character("x")]
+        )
+    }
+
+    func testTerminalInputDecoderHandlesSplitArrowSequence() {
+        var decoder = TerminalInputDecoder()
+
+        XCTAssertEqual(decoder.feed([27]), [])
+        XCTAssertEqual(decoder.feed([91]), [])
+        XCTAssertEqual(decoder.feed([65]), [.up])
+    }
+
+    func testTerminalInputDecoderFlushesStandaloneEscape() {
+        var decoder = TerminalInputDecoder()
+
+        XCTAssertEqual(decoder.feed([27]), [])
+        XCTAssertEqual(decoder.flushPendingEscape(), .escape)
+    }
+
+    func testTerminalInputDecoderHandlesSplitUTF8Character() {
+        var decoder = TerminalInputDecoder()
+        let bytes = Array("é".utf8)
+
+        XCTAssertEqual(decoder.feed([bytes[0]]), [])
+        XCTAssertEqual(decoder.feed([bytes[1]]), [.character("é")])
+    }
+
+    func testScreenWriterSkipsUnchangedFrame() {
+        let frame = TerminalFrame(
+            lines: ["one", "two"],
+            size: TerminalSize(columns: 80, rows: 24)
+        )
+
+        XCTAssertEqual(ScreenWriter.update(previous: frame, current: frame), "")
+    }
+
+    func testScreenWriterUpdatesOnlyChangedRows() {
+        let size = TerminalSize(columns: 80, rows: 24)
+        let previous = TerminalFrame(lines: ["one", "two"], size: size)
+        let current = TerminalFrame(lines: ["one", "changed"], size: size)
+
+        XCTAssertEqual(
+            ScreenWriter.update(previous: previous, current: current),
+            "\u{001B}[2;1H\u{001B}[2Kchanged"
+        )
+    }
+
+    func testScreenWriterClearsRowsWhenFrameShrinks() {
+        let size = TerminalSize(columns: 80, rows: 24)
+        let previous = TerminalFrame(lines: ["one", "two"], size: size)
+        let current = TerminalFrame(lines: ["one"], size: size)
+
+        XCTAssertEqual(
+            ScreenWriter.update(previous: previous, current: current),
+            "\u{001B}[2;1H\u{001B}[2K"
+        )
+    }
+
+    func testScreenWriterFullyRedrawsAfterResize() {
+        let previous = TerminalFrame(
+            lines: ["same"],
+            size: TerminalSize(columns: 80, rows: 24)
+        )
+        let current = TerminalFrame(
+            lines: ["same"],
+            size: TerminalSize(columns: 100, rows: 30)
+        )
+
+        XCTAssertEqual(
+            ScreenWriter.update(previous: previous, current: current),
+            "\u{001B}[2J\u{001B}[1;1H\u{001B}[2Ksame"
+        )
     }
 
     func testMatchesFiltersRejectsMissingLabel() {

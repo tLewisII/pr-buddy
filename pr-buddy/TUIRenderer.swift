@@ -5,7 +5,6 @@
 //  Created by Terry Lewis II on 5/30/26.
 //
 
-import Darwin
 import Foundation
 
 final class TUIRenderer {
@@ -46,10 +45,14 @@ final class TUIRenderer {
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
     private let updatedComponentsFormatter = DateComponentsFormatter()
-    private var previousListLineCount = 0
+    private let screenWriter: ScreenWriter
 
-    init(now: @escaping () -> Date = Date.init) {
+    init(
+        now: @escaping () -> Date = Date.init,
+        screenWriter: ScreenWriter = ScreenWriter()
+    ) {
         self.now = now
+        self.screenWriter = screenWriter
         updatedComponentsFormatter.maximumUnitCount = 1
         updatedComponentsFormatter.allowedUnits = [.year, .month, .weekOfMonth, .day, .hour, .minute]
         updatedComponentsFormatter.unitsStyle = .full
@@ -84,8 +87,11 @@ final class TUIRenderer {
         isAttentionViewSelected: Bool,
         options: Options,
         message: String,
-        inputBar: String? = nil
+        inputBar: String? = nil,
+        terminalSize: TerminalSize? = nil,
+        forceRedraw: Bool = false
     ) {
+        let terminalSize = terminalSize ?? .current()
         let lines = renderPullRequestListLines(
             pullRequests: pullRequests,
             selectedIndex: selectedIndex,
@@ -104,11 +110,14 @@ final class TUIRenderer {
             options: options,
             message: message,
             inputBar: inputBar,
-            terminalWidth: terminalWidth(),
-            terminalHeight: terminalHeight()
+            terminalWidth: terminalSize.columns,
+            terminalHeight: terminalSize.rows
         )
 
-        drawListLines(lines)
+        screenWriter.draw(
+            TerminalFrame(lines: lines, size: terminalSize),
+            force: forceRedraw
+        )
     }
 
     func renderPullRequestList(
@@ -324,25 +333,23 @@ final class TUIRenderer {
 
     func drawCommandResult(title: String, result: CommandResult) {
         clearScreen()
-        previousListLineCount = 0
-        print(title)
-        print(String(repeating: "-", count: title.count))
+        var output = [title, String(repeating: "-", count: title.count)]
 
         if !result.stdout.isEmpty {
-            print(result.stdout)
+            output.append(result.stdout)
         }
 
         if !result.stderr.isEmpty {
-            print(result.stderr)
+            output.append(result.stderr)
         }
 
         if result.stdout.isEmpty && result.stderr.isEmpty {
-            print("Command completed with no output.")
+            output.append("Command completed with no output.")
         }
 
-        print("")
-        print("Press any key to return to the PR list.")
-        fflush(stdout)
+        output.append("")
+        output.append("Press any key to return to the PR list.")
+        writeTerminal(output.joined(separator: "\n"))
     }
 
     func tableRows(for pullRequests: [PullRequest]) -> [[String]] {
@@ -568,31 +575,7 @@ final class TUIRenderer {
         TUIFormat.truncate(value, to: width)
     }
 
-    func terminalHeight() -> Int {
-        var size = winsize()
-
-        guard ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0, size.ws_row > 0 else {
-            return 24
-        }
-
-        return Int(size.ws_row)
-    }
-
-    func terminalWidth() -> Int {
-        var size = winsize()
-
-        guard ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0, size.ws_col > 0 else {
-            return 120
-        }
-
-        return Int(size.ws_col)
-    }
-
-    func visibleListRows() -> Int {
-        visibleListRows(terminalHeight: terminalHeight())
-    }
-
-    private func visibleListRows(terminalHeight: Int) -> Int {
+    func visibleListRows(terminalHeight: Int) -> Int {
         max(1, terminalHeight - 8)
     }
 
@@ -661,49 +644,12 @@ final class TUIRenderer {
         return anchoredLines
     }
 
-    private func drawListLines(_ lines: [String]) {
-        if previousListLineCount == 0 {
-            clearScreen()
-        }
-
-        let lineCount = max(lines.count, previousListLineCount)
-        var output = "\u{001B}[H"
-
-        for index in 0..<lineCount {
-            output += "\u{001B}[2K"
-
-            if index < lines.count {
-                output += lines[index]
-            }
-
-            if index < lineCount - 1 {
-                output += "\n"
-            }
-        }
-
-        previousListLineCount = lines.count
-        print(output, terminator: "")
-        fflush(stdout)
-    }
-
     func clearScreen() {
-        previousListLineCount = 0
-        print("\u{001B}[2J\u{001B}[H", terminator: "")
+        screenWriter.clearScreen()
     }
 
-    func moveCursorHome() {
-        print("\u{001B}[H", terminator: "")
+    func invalidateScreen() {
+        screenWriter.invalidate()
     }
 
-    func clearToEndOfScreen() {
-        print("\u{001B}[J", terminator: "")
-    }
-
-    func hideCursor() {
-        print("\u{001B}[?25l", terminator: "")
-    }
-
-    func showCursor() {
-        print("\u{001B}[?25h", terminator: "")
-    }
 }
