@@ -83,7 +83,8 @@ final class TUIRenderer {
         attentionTopIndex: Int,
         isAttentionPaneSelected: Bool,
         options: Options,
-        message: String
+        message: String,
+        inputBar: String? = nil
     ) {
         let lines = renderPullRequestListLines(
             pullRequests: pullRequests,
@@ -102,6 +103,7 @@ final class TUIRenderer {
             isAttentionPaneSelected: isAttentionPaneSelected,
             options: options,
             message: message,
+            inputBar: inputBar,
             terminalWidth: terminalWidth(),
             terminalHeight: terminalHeight()
         )
@@ -126,6 +128,7 @@ final class TUIRenderer {
         isAttentionPaneSelected: Bool,
         options: Options,
         message: String,
+        inputBar: String? = nil,
         terminalWidth: Int = 120,
         terminalHeight: Int = 24
     ) -> String {
@@ -146,6 +149,7 @@ final class TUIRenderer {
             isAttentionPaneSelected: isAttentionPaneSelected,
             options: options,
             message: message,
+            inputBar: inputBar,
             terminalWidth: terminalWidth,
             terminalHeight: terminalHeight
         ).joined(separator: "\n")
@@ -168,6 +172,7 @@ final class TUIRenderer {
         isAttentionPaneSelected: Bool,
         options: Options,
         message: String,
+        inputBar: String?,
         terminalWidth: Int,
         terminalHeight: Int
     ) -> [String] {
@@ -182,8 +187,20 @@ final class TUIRenderer {
         let repoText = options.repo ?? "current repository"
         let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
 
-        guard isAttentionPaneSelected else {
-            return singlePanePullRequestListLines(
+        let lines: [String]
+
+        if isAttentionPaneSelected {
+            lines = attentionPullRequestListLines(
+                pullRequests: attentionPullRequests,
+                selectedIndex: attentionSelectedIndex,
+                topIndex: attentionTopIndex,
+                visibleRows: visibleRows,
+                repoText: repoText,
+                message: message,
+                terminalWidth: terminalWidth
+            )
+        } else {
+            lines = singlePanePullRequestListLines(
                 rows: rows,
                 headers: headers,
                 selectedIndex: selectedIndex,
@@ -200,14 +217,11 @@ final class TUIRenderer {
             )
         }
 
-        return attentionPullRequestListLines(
-            pullRequests: attentionPullRequests,
-            selectedIndex: attentionSelectedIndex,
-            topIndex: attentionTopIndex,
-            visibleRows: visibleRows,
-            repoText: repoText,
-            message: message,
-            terminalWidth: terminalWidth
+        return bottomAnchored(
+            lines,
+            inputBar: inputBar,
+            terminalWidth: terminalWidth,
+            terminalHeight: terminalHeight
         )
     }
 
@@ -604,6 +618,23 @@ final class TUIRenderer {
 
     private func clippedLine(_ line: String, to terminalWidth: Int) -> String {
         TUIFormat.clipped(line, to: max(1, terminalWidth))
+    }
+
+    private func bottomAnchored(
+        _ lines: [String],
+        inputBar: String?,
+        terminalWidth: Int,
+        terminalHeight: Int
+    ) -> [String] {
+        guard let inputBar else {
+            return lines
+        }
+
+        let contentHeight = max(0, terminalHeight - 1)
+        var anchoredLines = Array(lines.prefix(contentHeight))
+        anchoredLines.append(contentsOf: repeatElement("", count: max(0, contentHeight - anchoredLines.count)))
+        anchoredLines.append(clippedLine(inputBar, to: terminalWidth))
+        return anchoredLines
     }
 
     private func drawListLines(_ lines: [String]) {

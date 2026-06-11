@@ -873,6 +873,38 @@ final class PRBuddyTests: XCTestCase {
         }
     }
 
+    func testSearchInputBarIsAnchoredToBottomAndClippedToTerminalWidth() {
+        let terminalWidth = 48
+        let terminalHeight = 14
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [makePullRequest()],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainPaneSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionPaneSelected: false,
+            options: Options(),
+            message: "",
+            inputBar: "Filter: needs-review_  enter apply  ctrl-u clear  esc cancel  backspace edit",
+            terminalWidth: terminalWidth,
+            terminalHeight: terminalHeight
+        )
+        let lines = rendered.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        XCTAssertEqual(lines.count, terminalHeight)
+        XCTAssertEqual(lines.last, "Filter: needs-review_  enter apply  ctrl-u clear" + TUIFormat.Color.reset)
+        XCTAssertTrue(lines[terminalHeight - 2].isEmpty)
+        XCTAssertLessThanOrEqual(TUIFormat.visibleLength(lines.last ?? ""), terminalWidth)
+    }
+
     func testAttentionPullRequestListMatchesFullScreenSnapshot() throws {
         var options = Options()
         options.repo = "owner/project"

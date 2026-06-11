@@ -98,7 +98,8 @@ enum InteractiveSession {
                 attentionTopIndex: state.attentionTopIndex,
                 isAttentionPaneSelected: state.focus == .attentionRow,
                 options: options,
-                message: "Filter: \(query)_  enter apply  ctrl-u clear  esc cancel  backspace edit"
+                message: "",
+                inputBar: "Filter: \(query)_  enter apply  ctrl-u clear  esc cancel  backspace edit"
             )
 
             switch readSearchInput() {
