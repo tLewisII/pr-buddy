@@ -1,6 +1,6 @@
 import ProjectDescription
 
-let macOSDeploymentTarget = "26.1"
+let macOSDeploymentTarget = "14.0"
 
 func moduleSettings(_ moduleName: String, productName: String? = nil, base: SettingsDictionary = [:]) -> Settings {
     var settings = base

@@ -11,7 +11,7 @@ When stdin is not a terminal, it prints the matching PRs as a table instead.
 
 ## Requirements
 
-- macOS 26.1 or later
+- macOS 14.0 or later
 - Swift 6.0 or later
 - [GitHub CLI](https://cli.github.com/) installed and authenticated
 
@@ -22,7 +22,26 @@ gh auth login
 gh auth status
 ```
 
-## Build and install
+## Install
+
+### Mint
+
+Install [Mint](https://github.com/yonaskolb/Mint), then install the latest tagged release of `pr-buddy`:
+
+```sh
+brew install mint
+mint install tLewisII/pr-buddy
+```
+
+Mint links the executable into `~/.mint/bin`. Add that directory to your `PATH` if needed:
+
+```sh
+export PATH="$HOME/.mint/bin:$PATH"
+```
+
+To install a specific release, append its version, for example `@0.1.0`.
+
+### Build from source
 
 Build a release executable with Swift Package Manager:
 

@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-let macOSDeploymentTarget = "26.1"
+let macOSDeploymentTarget = "14.0"
 
 let package = Package(
     name: "pr-buddy",
