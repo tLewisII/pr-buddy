@@ -41,7 +41,7 @@ private struct PRBuddyCommand: ParsableCommand {
         abstract: "Fetch pull requests with `gh pr list` and open an interactive PR picker when run in a terminal.",
         discussion: """
         Interactive keys:
-          /              Filter PRs by text or fields.
+          /              Open searchable slash commands.
           arrows, j/k    Move selection.
           tab            Toggle main and involves:@me views.
           enter          Open selected PR in the browser.
@@ -49,7 +49,7 @@ private struct PRBuddyCommand: ParsableCommand {
           r              Refresh PRs.
           q              Quit.
 
-        Interactive filter fields:
+        Use /filter to filter PRs by text or fields:
           ctrl-u          Clear the active filter.
           status:draft    Match status or review decision.
           label:bug,ui    Require labels.

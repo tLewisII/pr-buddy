@@ -87,6 +87,7 @@ final class TUIRenderer {
         options: Options,
         message: String,
         inputBar: String? = nil,
+        commandPopup: SlashCommandPopup? = nil,
         terminalSize: TerminalSize? = nil,
         forceRedraw: Bool = false
     ) {
@@ -109,6 +110,7 @@ final class TUIRenderer {
             options: options,
             message: message,
             inputBar: inputBar,
+            commandPopup: commandPopup,
             terminalWidth: terminalSize.columns,
             terminalHeight: terminalSize.rows
         )
@@ -137,6 +139,7 @@ final class TUIRenderer {
         options: Options,
         message: String,
         inputBar: String? = nil,
+        commandPopup: SlashCommandPopup? = nil,
         terminalWidth: Int = 120,
         terminalHeight: Int = 24
     ) -> String {
@@ -158,6 +161,7 @@ final class TUIRenderer {
             options: options,
             message: message,
             inputBar: inputBar,
+            commandPopup: commandPopup,
             terminalWidth: terminalWidth,
             terminalHeight: terminalHeight
         ).joined(separator: "\n")
@@ -181,6 +185,7 @@ final class TUIRenderer {
         options: Options,
         message: String,
         inputBar: String?,
+        commandPopup: SlashCommandPopup?,
         terminalWidth: Int,
         terminalHeight: Int
     ) -> [String] {
@@ -193,7 +198,16 @@ final class TUIRenderer {
         )
         let activeSelectedIndex = isAttentionViewSelected ? attentionSelectedIndex : selectedIndex
         let activeTopIndex = isAttentionViewSelected ? attentionTopIndex : topIndex
-        let visibleRows = visibleListRows(terminalHeight: terminalHeight)
+        let visiblePopupRows = commandPopup.map {
+            visibleCommandRows(
+                terminalHeight: terminalHeight,
+                commandCount: max(1, $0.commands.count)
+            )
+        } ?? 0
+        let visibleRows = visibleListRows(
+            terminalHeight: terminalHeight,
+            reservedBottomRows: visiblePopupRows
+        )
         let endIndex = min(rows.count, activeTopIndex + visibleRows)
         let repoText = options.repo ?? "current repository"
         let shownRange = rows.isEmpty ? "0 of 0" : "\(activeTopIndex + 1)-\(endIndex) of \(rows.count)"
@@ -217,6 +231,7 @@ final class TUIRenderer {
         return bottomAnchored(
             lines,
             inputBar: inputBar,
+            commandPopup: commandPopup,
             terminalWidth: terminalWidth,
             terminalHeight: terminalHeight
         )
@@ -245,7 +260,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange)  tab switch  / filter  arrows/jk  enter web  c checkout  r refresh  q",
+            "Showing \(shownRange)  tab switch  / commands  arrows/jk  enter web  c checkout  r refresh  q",
             message.isEmpty ? " " : message,
             "",
             "  " + renderHeaderRow(
@@ -513,8 +528,12 @@ final class TUIRenderer {
         TUIFormat.truncate(value, to: width)
     }
 
-    func visibleListRows(terminalHeight: Int) -> Int {
-        max(1, terminalHeight - 8)
+    func visibleListRows(terminalHeight: Int, reservedBottomRows: Int = 0) -> Int {
+        max(1, terminalHeight - 8 - max(0, reservedBottomRows))
+    }
+
+    func visibleCommandRows(terminalHeight: Int, commandCount: Int) -> Int {
+        min(max(0, commandCount), max(0, terminalHeight - 8))
     }
 
     private func mainViewColumnWidths(
@@ -553,6 +572,7 @@ final class TUIRenderer {
     private func bottomAnchored(
         _ lines: [String],
         inputBar: String?,
+        commandPopup: SlashCommandPopup?,
         terminalWidth: Int,
         terminalHeight: Int
     ) -> [String] {
@@ -560,11 +580,53 @@ final class TUIRenderer {
             return lines
         }
 
-        let contentHeight = max(0, terminalHeight - 1)
+        guard terminalHeight > 0 else {
+            return []
+        }
+
+        let popupLines = commandPopup.map {
+            renderCommandPopup(
+                $0,
+                visibleRows: visibleCommandRows(
+                    terminalHeight: terminalHeight,
+                    commandCount: max(1, $0.commands.count)
+                ),
+                terminalWidth: terminalWidth
+            )
+        } ?? []
+        let contentHeight = max(0, terminalHeight - popupLines.count - 1)
         var anchoredLines = Array(lines.prefix(contentHeight))
         anchoredLines.append(contentsOf: repeatElement("", count: max(0, contentHeight - anchoredLines.count)))
+        anchoredLines.append(contentsOf: popupLines)
         anchoredLines.append(clippedLine(inputBar, to: terminalWidth))
         return anchoredLines
+    }
+
+    func renderCommandPopup(
+        _ popup: SlashCommandPopup,
+        visibleRows: Int,
+        terminalWidth: Int
+    ) -> [String] {
+        guard visibleRows > 0 else {
+            return []
+        }
+
+        guard !popup.commands.isEmpty else {
+            return [clippedLine("  No matching commands", to: terminalWidth)]
+        }
+
+        let selectedIndex = min(max(popup.selectedIndex, 0), popup.commands.count - 1)
+        let maximumTopIndex = max(0, popup.commands.count - visibleRows)
+        let topIndex = min(max(popup.topIndex, 0), maximumTopIndex)
+        let endIndex = min(popup.commands.count, topIndex + visibleRows)
+        let commandWidth = popup.commands.map { $0.name.count + 1 }.max() ?? 1
+
+        return (topIndex..<endIndex).map { index in
+            let command = popup.commands[index]
+            let name = TUIFormat.padded("/\(command.name)", to: commandWidth)
+            let line = clippedLine("  \(name)  \(command.description)", to: terminalWidth)
+            return index == selectedIndex ? TUIFormat.inverted(line) : line
+        }
     }
 
     func clearScreen() {

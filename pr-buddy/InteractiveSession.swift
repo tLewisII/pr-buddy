@@ -56,11 +56,27 @@ enum InteractiveSession {
                     state.sortByNextFileOrder()
                 } else if state.focus == .reviewHeader {
                     state.sortByNextReviewOrder()
-                } else {
-                    try openSelectedPullRequest(state: &state, options: options)
+                } else if try dispatch(
+                    .open,
+                    state: &state,
+                    renderer: renderer,
+                    eventReader: eventReader,
+                    terminalSize: &terminalSize,
+                    options: options
+                ) {
+                    return
                 }
             case .key(.tab):
-                state.toggleView()
+                if try dispatch(
+                    .toggleView,
+                    state: &state,
+                    renderer: renderer,
+                    eventReader: eventReader,
+                    terminalSize: &terminalSize,
+                    options: options
+                ) {
+                    return
+                }
             case .key(.character(let character)):
                 if try handleCharacter(
                     character,
@@ -77,8 +93,23 @@ enum InteractiveSession {
             case .key(.escape), .key(.backspace), .key(.clear):
                 continue
             case .key(.unknown):
-                state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter to open, c to checkout, r to refresh, q to quit."
+                state.message = helpMessage
             }
+        }
+    }
+
+    static let helpMessage = "Use / for commands, arrows/h/j/k/l to move, tab to switch views, enter to open, c to checkout, r to refresh, q to quit."
+
+    static func action(forShortcut character: Character) -> InteractiveAction? {
+        switch String(character).lowercased() {
+        case "c":
+            return .checkout
+        case "r":
+            return .refresh
+        case "q":
+            return .quit
+        default:
+            return nil
         }
     }
 
@@ -99,22 +130,8 @@ enum InteractiveSession {
             state.moveUp()
         case "l":
             state.moveRight()
-        case "c":
-            return try checkoutSelectedPullRequest(
-                state: &state,
-                renderer: renderer,
-                eventReader: eventReader,
-                terminalSize: &terminalSize,
-                options: options
-            )
-        case "o", "v":
-            break
-        case "r":
-            try state.refresh(options: options)
-        case "q":
-            return true
         case "/":
-            return editTextFilter(
+            return try editSlashCommand(
                 state: &state,
                 renderer: renderer,
                 eventReader: eventReader,
@@ -122,10 +139,124 @@ enum InteractiveSession {
                 options: options
             )
         default:
-            state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter to open, c to checkout, r to refresh, q to quit."
+            guard let action = action(forShortcut: character) else {
+                state.message = helpMessage
+                return false
+            }
+
+            return try dispatch(
+                action,
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: options
+            )
         }
 
         return false
+    }
+
+    private static func editSlashCommand(
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: Options
+    ) throws -> Bool {
+        var commandState = SlashCommandState()
+
+        while true {
+            let visibleCommandRows = renderer.visibleCommandRows(
+                terminalHeight: terminalSize.rows,
+                commandCount: max(1, commandState.matchingCommands.count)
+            )
+            commandState.keepSelectionVisible(visibleRows: visibleCommandRows)
+            state.keepSelectionsVisible(
+                visibleRows: renderer.visibleListRows(
+                    terminalHeight: terminalSize.rows,
+                    reservedBottomRows: visibleCommandRows
+                )
+            )
+            draw(
+                state: state,
+                renderer: renderer,
+                options: options,
+                terminalSize: terminalSize,
+                message: "",
+                inputBar: "/\(commandState.query)_  arrows select  tab complete  enter run  esc cancel",
+                commandPopup: commandState.popup
+            )
+
+            switch eventReader.nextEvent() {
+            case .resize(let size):
+                terminalSize = size
+                renderer.invalidateScreen()
+            case .interrupt, .endOfInput, .key(.interrupt):
+                return true
+            case .key(let key):
+                switch commandState.handle(key) {
+                case .continueEditing:
+                    continue
+                case .cancel:
+                    return false
+                case .execute(let action):
+                    return try dispatch(
+                        action,
+                        state: &state,
+                        renderer: renderer,
+                        eventReader: eventReader,
+                        terminalSize: &terminalSize,
+                        options: options
+                    )
+                }
+            }
+        }
+    }
+
+    private static func dispatch(
+        _ action: InteractiveAction,
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: Options
+    ) throws -> Bool {
+        switch action {
+        case .filter:
+            return editTextFilter(
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: options
+            )
+        case .checkout:
+            return try checkoutSelectedPullRequest(
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: options
+            )
+        case .open:
+            try openSelectedPullRequest(state: &state, options: options)
+            return false
+        case .refresh:
+            try state.refresh(options: options)
+            return false
+        case .showMain:
+            state.showMainView()
+            return false
+        case .showAttention:
+            state.showAttentionView()
+            return false
+        case .toggleView:
+            state.toggleView()
+            return false
+        case .quit:
+            return true
+        }
     }
 
     private static func editTextFilter(
@@ -250,6 +381,7 @@ enum InteractiveSession {
         terminalSize: TerminalSize,
         message: String? = nil,
         inputBar: String? = nil,
+        commandPopup: SlashCommandPopup? = nil,
         forceRedraw: Bool = false
     ) {
         renderer.drawPullRequestList(
@@ -270,6 +402,7 @@ enum InteractiveSession {
             options: options,
             message: message ?? state.displayMessage,
             inputBar: inputBar,
+            commandPopup: commandPopup,
             terminalSize: terminalSize,
             forceRedraw: forceRedraw
         )
@@ -404,12 +537,20 @@ extension InteractiveSession {
 
         mutating func toggleView() {
             if focus == .attentionRow {
-                focus = pullRequests.isEmpty ? .updatedHeader : .mainRow
-                message = "Showing main PRs."
+                showMainView()
             } else {
-                focus = .attentionRow
-                message = "Showing involves:@me PRs."
+                showAttentionView()
             }
+        }
+
+        mutating func showMainView() {
+            focus = pullRequests.isEmpty ? .updatedHeader : .mainRow
+            message = "Showing main PRs."
+        }
+
+        mutating func showAttentionView() {
+            focus = .attentionRow
+            message = "Showing involves:@me PRs."
         }
 
         mutating func sortByNextUpdatedOrder() {

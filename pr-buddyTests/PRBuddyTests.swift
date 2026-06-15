@@ -360,6 +360,92 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertTrue(state.attentionPullRequests.isEmpty)
     }
 
+    func testSlashCommandRegistryPreservesPresentationOrderForEmptyQuery() {
+        XCTAssertEqual(
+            SlashCommandRegistry.filtered(by: "").map(\.name),
+            ["filter", "checkout", "open", "refresh", "main", "attention", "quit"]
+        )
+    }
+
+    func testSlashCommandRegistryMatchesCaseInsensitivePrefixesAndExactNames() {
+        XCTAssertEqual(SlashCommandRegistry.filtered(by: "R").map(\.name), ["refresh"])
+        XCTAssertEqual(SlashCommandRegistry.filtered(by: "ATTen").map(\.name), ["attention"])
+        XCTAssertEqual(SlashCommandRegistry.exactMatch(for: "/OPEN")?.action, .open)
+        XCTAssertNil(SlashCommandRegistry.exactMatch(for: "unknown"))
+    }
+
+    func testSlashCommandSelectionWrapsClampsAndResetsAfterQueryChanges() {
+        var state = SlashCommandState(selectedIndex: 99, topIndex: 99)
+
+        XCTAssertEqual(state.selectedIndex, SlashCommandRegistry.commands.count - 1)
+        state.moveDown()
+        XCTAssertEqual(state.selectedIndex, 0)
+        state.moveUp()
+        XCTAssertEqual(state.selectedIndex, SlashCommandRegistry.commands.count - 1)
+
+        state.keepSelectionVisible(visibleRows: 2)
+        XCTAssertEqual(state.topIndex, SlashCommandRegistry.commands.count - 2)
+
+        state.append("m")
+        XCTAssertEqual(state.matchingCommands.map(\.name), ["main"])
+        XCTAssertEqual(state.selectedIndex, 0)
+        XCTAssertEqual(state.topIndex, 0)
+    }
+
+    func testSlashCommandTabCompletesWithoutExecuting() {
+        var state = SlashCommandState(query: "ch")
+
+        XCTAssertEqual(state.handle(.tab), .continueEditing)
+        XCTAssertEqual(state.query, "checkout")
+        XCTAssertEqual(state.commandForExecution?.action, .checkout)
+    }
+
+    func testSlashCommandEnterDispatchesEveryRegisteredAction() {
+        for command in SlashCommandRegistry.commands {
+            var state = SlashCommandState(query: command.name)
+
+            XCTAssertEqual(state.handle(.enter), .execute(command.action))
+        }
+    }
+
+    func testSlashCommandCancelClearAndNoMatchBehavior() {
+        var emptyState = SlashCommandState()
+        XCTAssertEqual(emptyState.handle(.escape), .cancel)
+        XCTAssertEqual(emptyState.handle(.backspace), .cancel)
+
+        var populatedState = SlashCommandState(query: "open")
+        XCTAssertEqual(populatedState.handle(.clear), .continueEditing)
+        XCTAssertEqual(populatedState.query, "")
+
+        var unmatchedState = SlashCommandState(query: "zzz")
+        XCTAssertTrue(unmatchedState.matchingCommands.isEmpty)
+        XCTAssertEqual(unmatchedState.handle(.enter), .continueEditing)
+        XCTAssertNil(unmatchedState.commandForExecution)
+    }
+
+    func testSlashCommandsAndRetainedShortcutsUseTheSameActions() {
+        XCTAssertEqual(InteractiveSession.action(forShortcut: "c"), SlashCommandRegistry.exactMatch(for: "checkout")?.action)
+        XCTAssertEqual(InteractiveSession.action(forShortcut: "r"), SlashCommandRegistry.exactMatch(for: "refresh")?.action)
+        XCTAssertEqual(InteractiveSession.action(forShortcut: "q"), SlashCommandRegistry.exactMatch(for: "quit")?.action)
+        XCTAssertNil(InteractiveSession.action(forShortcut: "o"))
+        XCTAssertNil(InteractiveSession.action(forShortcut: "v"))
+    }
+
+    func testSlashCommandViewActionsUseExistingViewState() {
+        var state = InteractiveSession.State(
+            basePullRequests: [makePullRequest(number: 1)],
+            attentionPullRequests: [makePullRequest(number: 2)]
+        )
+
+        state.showAttentionView()
+        XCTAssertEqual(state.focus, .attentionRow)
+        XCTAssertEqual(state.selectedPullRequest?.number, 2)
+
+        state.showMainView()
+        XCTAssertEqual(state.focus, .mainRow)
+        XCTAssertEqual(state.selectedPullRequest?.number, 1)
+    }
+
     func testTerminalInputDecoderHandlesControlAndCharacterKeys() {
         var decoder = TerminalInputDecoder()
 
@@ -1001,6 +1087,64 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(lines.last, "Filter: needs-review_  enter apply  ctrl-u clear" + TUIFormat.Color.reset)
         XCTAssertTrue(lines[terminalHeight - 2].isEmpty)
         XCTAssertLessThanOrEqual(TUIFormat.visibleLength(lines.last ?? ""), terminalWidth)
+    }
+
+    func testSlashCommandPopupRendersSelectionAndNoMatchState() {
+        let renderer = TUIRenderer()
+        let commandLines = renderer.renderCommandPopup(
+            SlashCommandState().popup,
+            visibleRows: 3,
+            terminalWidth: 48
+        )
+        let noMatchLines = renderer.renderCommandPopup(
+            SlashCommandState(query: "zzz").popup,
+            visibleRows: 3,
+            terminalWidth: 48
+        )
+
+        XCTAssertEqual(commandLines.count, 3)
+        XCTAssertTrue(commandLines[0].contains("\u{001B}[7m"))
+        XCTAssertTrue(commandLines[0].contains("/filter"))
+        XCTAssertEqual(noMatchLines, ["  No matching commands"])
+    }
+
+    func testSlashCommandPopupIsBottomAnchoredAndFitsConstrainedTerminals() {
+        let terminalWidth = 32
+        let terminalHeight = 10
+        let commandState = SlashCommandState(query: "c")
+        let renderer = TUIRenderer()
+        let rendered = renderer.renderPullRequestList(
+            pullRequests: [makePullRequest()],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainViewSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionViewSelected: false,
+            options: Options(),
+            message: "",
+            inputBar: "/c_  arrows select  tab complete",
+            commandPopup: commandState.popup,
+            terminalWidth: terminalWidth,
+            terminalHeight: terminalHeight
+        )
+        let lines = rendered.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        XCTAssertEqual(lines.count, terminalHeight)
+        XCTAssertTrue(lines[terminalHeight - 2].contains("/checkout"))
+        XCTAssertTrue(lines.last?.contains("/c_") == true)
+        for line in lines {
+            XCTAssertLessThanOrEqual(TUIFormat.visibleLength(line), terminalWidth)
+        }
+
+        XCTAssertEqual(renderer.visibleCommandRows(terminalHeight: 7, commandCount: 7), 0)
     }
 
     func testAttentionPullRequestListMatchesFullScreenSnapshot() throws {
