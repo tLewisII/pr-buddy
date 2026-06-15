@@ -695,18 +695,6 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(rows[0][1], "3 +120 -45")
     }
 
-    func testAttentionTableRowsShowOnlyStatusAndTitle() {
-        let pullRequest = makePullRequest(
-            title: "Review the attention view",
-            state: "OPEN",
-            isDraft: false
-        )
-
-        let rows = TUIRenderer().attentionTableRows(for: [pullRequest])
-
-        XCTAssertEqual(rows, [["Review the attention view", "open"]])
-    }
-
     func testHeadersShowFileSortState() {
         let renderer = TUIRenderer()
 

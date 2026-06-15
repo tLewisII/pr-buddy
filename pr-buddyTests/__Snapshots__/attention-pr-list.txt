@@ -1,8 +1,8 @@
 pr-buddy  owner/project
-involves:@me 1-2 of 2  tab main  / filter  arrows/jk  open enter  checkout c  refresh r  q
+Showing 1-2 of 2  tab switch  / filter  arrows/jk  enter web  c checkout  r refresh  q
 
 
-  involves:@me (2)
-  Title                  Status
-  Update release notes   draft
-> Tighten parser errors  open
+  Updated    Files     Status  Review    Labels       Title                  Author
+  ---------  --------  ------  --------  -----------  ---------------------  ------
+  1w         3 +12 -4  draft   1         enhancement  Update release notes   terry
+> 1w         3 +12 -4  open    1         enhancement  Tighten parser errors  terry
