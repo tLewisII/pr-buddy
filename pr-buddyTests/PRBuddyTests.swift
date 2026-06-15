@@ -1080,6 +1080,37 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertTrue(rendered.contains("long-contributor-name"))
     }
 
+    func testMainPullRequestListAllowsWiderLabelsAndAuthorColumns() {
+        let pullRequest = makePullRequest(
+            title: "Keep useful pull request metadata visible before truncating title text",
+            author: PullRequest.Author(login: "long-contributor-handle-name"),
+            labels: ["backend", "needs product review"]
+        )
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [pullRequest],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainViewSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionViewSelected: false,
+            options: Options(),
+            message: "",
+            terminalWidth: 160,
+            terminalHeight: 14
+        )
+
+        XCTAssertTrue(rendered.contains("backend, needs product review"))
+        XCTAssertTrue(rendered.contains("long-contributor-handle-name"))
+    }
+
     func testSearchInputBarIsAnchoredToBottomAndClippedToTerminalWidth() {
         let terminalWidth = 48
         let terminalHeight = 14

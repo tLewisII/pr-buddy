@@ -40,7 +40,7 @@ final class TUIRenderer {
     }
 
     private let headers = ["Updated  ", "Files", "Status", "Review  ", "Labels", "Title", "Author"]
-    private let maximumWidths = [9, 18, 8, 18, 24, 72, 24]
+    private let maximumWidths = [9, 18, 8, 18, 36, 72, 32]
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
     private let updatedComponentsFormatter = DateComponentsFormatter()
