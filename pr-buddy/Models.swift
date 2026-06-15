@@ -8,8 +8,10 @@
 import Foundation
 
 struct Options {
+    static let defaultSearch = "is:pr is:open"
+
     var repo: String?
-    var search: String?
+    var search: String? = defaultSearch
     var labels: [String] = []
     var statuses: [String] = []
     var minChangedFiles: Int?

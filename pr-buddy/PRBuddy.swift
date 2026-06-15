@@ -62,7 +62,7 @@ private struct PRBuddyCommand: ParsableCommand {
     var repo: String?
 
     @Option(name: [.customLong("search"), .customShort("s")], help: "Pass a GitHub search query to `gh pr list --search`.")
-    var search: String?
+    var search = Options.defaultSearch
 
     @Option(name: [.customLong("label"), .customShort("l")], help: "Require a label. May be repeated or comma-separated.")
     var labels: [String] = []

@@ -25,6 +25,12 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(options.limit, 25)
     }
 
+    func testParseOptionsDefaultsSearchToOpenPullRequests() throws {
+        let options = try PRBuddy.parseOptions([])
+
+        XCTAssertEqual(options.search, Options.defaultSearch)
+    }
+
 #if DEBUG
     func testParseOptionsAcceptsDebugJSONPathInDebugBuilds() throws {
         let options = try PRBuddy.parseOptions(["--debug-json", "fixtures/all-options-prs.json"])
@@ -160,6 +166,23 @@ final class PRBuddyTests: XCTestCase {
             "bug",
             "--label",
             "needs review"
+        ])
+    }
+
+    func testPullRequestListArgumentsIncludesDefaultSearch() {
+        let options = Options()
+
+        XCTAssertEqual(PRBuddy.pullRequestListArguments(options: options), [
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "50",
+            "--json",
+            "number,title,author,headRefName,baseRefName,state,isDraft,reviewDecision,changedFiles,additions,deletions,labels,reviews,updatedAt,url",
+            "--search",
+            Options.defaultSearch
         ])
     }
 
