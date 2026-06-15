@@ -1131,14 +1131,14 @@ final class PRBuddyTests: XCTestCase {
             isAttentionViewSelected: false,
             options: Options(),
             message: "",
-            inputBar: "Filter: needs-review_  enter apply  ctrl-u clear  esc cancel  backspace edit",
+            inputBar: "Filter: needs-review_  enter apply  esc clear",
             terminalWidth: terminalWidth,
             terminalHeight: terminalHeight
         )
         let lines = rendered.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         XCTAssertEqual(lines.count, terminalHeight)
-        XCTAssertEqual(lines.last, "Filter: needs-review_  enter apply  ctrl-u clear" + TUIFormat.Color.reset)
+        XCTAssertEqual(lines.last, "Filter: needs-review_  enter apply  esc clear")
         XCTAssertTrue(lines[terminalHeight - 2].isEmpty)
         XCTAssertLessThanOrEqual(TUIFormat.visibleLength(lines.last ?? ""), terminalWidth)
     }

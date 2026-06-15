@@ -50,7 +50,7 @@ private struct PRBuddyCommand: ParsableCommand {
           q              Quit.
 
         Use /filter to filter PRs by text or fields:
-          ctrl-u          Clear the active filter.
+          esc             Clear the active filter.
           status:draft    Match status or review decision.
           label:bug,ui    Require labels.
           files:2..8      Match changed-file count or range.

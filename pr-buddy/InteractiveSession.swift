@@ -280,7 +280,7 @@ enum InteractiveSession {
                 options: options,
                 terminalSize: terminalSize,
                 message: "",
-                inputBar: "Filter: \(query)_  enter apply  ctrl-u clear  esc cancel  backspace edit"
+                inputBar: "Filter: \(query)_  enter apply  esc clear"
             )
 
             switch eventReader.nextEvent() {
@@ -299,12 +299,10 @@ enum InteractiveSession {
                 state.applyTextFilter(query)
                 return false
             case .key(.escape):
-                state.applyTextFilter(originalQuery)
-                state.message = originalQuery.isEmpty ? "Filter cancelled." : "Filter unchanged."
-                return false
-            case .key(.clear):
                 state.applyTextFilter("")
                 return false
+            case .key(.clear):
+                query = ""
             case .key:
                 continue
             }
