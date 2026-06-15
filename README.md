@@ -1,6 +1,6 @@
 # pr-buddy
 
-`pr-buddy` is a macOS terminal UI for finding and acting on GitHub pull requests. It uses the GitHub CLI to fetch PR data, then provides keyboard-driven filtering, sorting, viewing, checkout, and browser actions.
+`pr-buddy` is a macOS terminal UI for finding and acting on GitHub pull requests. It uses the GitHub CLI to fetch PR data, then provides keyboard-driven filtering, sorting, checkout, and browser actions.
 
 When run in a terminal, `pr-buddy` opens an interactive picker with two views:
 
@@ -110,10 +110,8 @@ Use `pr-buddy --help` for the generated command reference.
 | --- | --- |
 | `Up` / `Down`, `j` / `k` | Move through PRs. |
 | `Left` / `Right`, `h` / `l` | Move between sortable headers. |
-| `Enter` | View the selected PR, or change the selected column's sort order. |
-| `v` | View the selected PR with `gh pr view`. |
+| `Enter` | Open the selected PR in a browser, or change the selected column's sort order. |
 | `c` | Check out the selected PR with `gh pr checkout`. |
-| `o` | Open the selected PR in a browser. |
 | `Tab` | Toggle between the main and `involves:@me` views. |
 | `/` | Filter the displayed PR list by text. |
 | `r` | Refresh both views. |

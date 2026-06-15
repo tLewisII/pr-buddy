@@ -56,14 +56,8 @@ enum InteractiveSession {
                     state.sortByNextFileOrder()
                 } else if state.focus == .reviewHeader {
                     state.sortByNextReviewOrder()
-                } else if try viewSelectedPullRequest(
-                    state: &state,
-                    renderer: renderer,
-                    eventReader: eventReader,
-                    terminalSize: &terminalSize,
-                    options: options
-                ) {
-                    return
+                } else {
+                    try openSelectedPullRequest(state: &state, options: options)
                 }
             case .key(.tab):
                 state.toggleView()
@@ -83,7 +77,7 @@ enum InteractiveSession {
             case .key(.escape), .key(.backspace), .key(.clear):
                 continue
             case .key(.unknown):
-                state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+                state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter to open, c to checkout, r to refresh, q to quit."
             }
         }
     }
@@ -105,14 +99,6 @@ enum InteractiveSession {
             state.moveUp()
         case "l":
             state.moveRight()
-        case "v":
-            return try viewSelectedPullRequest(
-                state: &state,
-                renderer: renderer,
-                eventReader: eventReader,
-                terminalSize: &terminalSize,
-                options: options
-            )
         case "c":
             return try checkoutSelectedPullRequest(
                 state: &state,
@@ -121,8 +107,8 @@ enum InteractiveSession {
                 terminalSize: &terminalSize,
                 options: options
             )
-        case "o":
-            try openSelectedPullRequest(state: &state, options: options)
+        case "o", "v":
+            break
         case "r":
             try state.refresh(options: options)
         case "q":
@@ -136,7 +122,7 @@ enum InteractiveSession {
                 options: options
             )
         default:
-            state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter/v to view, c to checkout, o to open, r to refresh, q to quit."
+            state.message = "Use / to filter, arrows/h/j/k/l to move, tab to switch views, enter to open, c to checkout, r to refresh, q to quit."
         }
 
         return false
@@ -192,36 +178,6 @@ enum InteractiveSession {
                 continue
             }
         }
-    }
-
-    private static func viewSelectedPullRequest(
-        state: inout State,
-        renderer: TUIRenderer,
-        eventReader: TerminalEventReader,
-        terminalSize: inout TerminalSize,
-        options: Options
-    ) throws -> Bool {
-        guard !state.focus.isSortableHeader else {
-            state.message = "Press enter on the Updated, Files, or Review header to change sorting."
-            return false
-        }
-
-        guard let selectedPullRequest = state.selectedPullRequest else {
-            state.message = "No pull requests to view."
-            return false
-        }
-
-        renderer.drawCommandResult(
-            title: "PR #\(selectedPullRequest.number)",
-            result: try GitHubClient.runPRCommand(["view", String(selectedPullRequest.number)], options: options)
-        )
-        let shouldExit = waitForDismissal(
-            eventReader: eventReader,
-            renderer: renderer,
-            terminalSize: &terminalSize
-        )
-        state.message = "Returned from details."
-        return shouldExit
     }
 
     private static func checkoutSelectedPullRequest(

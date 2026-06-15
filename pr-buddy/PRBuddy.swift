@@ -44,9 +44,8 @@ private struct PRBuddyCommand: ParsableCommand {
           /              Filter PRs by text or fields.
           arrows, j/k    Move selection.
           tab            Toggle main and involves:@me views.
-          enter, v       View selected PR details.
+          enter          Open selected PR in the browser.
           c              Checkout selected PR.
-          o              Open selected PR in the browser.
           r              Refresh PRs.
           q              Quit.
 

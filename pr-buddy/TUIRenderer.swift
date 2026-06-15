@@ -257,7 +257,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange)  tab switch  / filter  arrows/jk  enter/v view  c checkout  o web  r refresh  q",
+            "Showing \(shownRange)  tab switch  / filter  arrows/jk  enter web  c checkout  r refresh  q",
             message.isEmpty ? " " : message,
             "",
             "  " + renderHeaderRow(
@@ -306,7 +306,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "involves:@me \(shownRange)  tab main  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q",
+            "involves:@me \(shownRange)  tab main  / filter  arrows/jk  open enter  checkout c  refresh r  q",
             message.isEmpty ? " " : message,
             "",
             "  involves:@me (\(rows.count))",

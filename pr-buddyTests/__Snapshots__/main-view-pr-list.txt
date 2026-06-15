@@ -1,5 +1,5 @@
 pr-buddy  owner/project
-Showing 1-2 of 2  tab switch  / filter  arrows/jk  enter/v view  c checkout  o web  r refresh  q
+Showing 1-2 of 2  tab switch  / filter  arrows/jk  enter web  c checkout  r refresh  q
 Sorted by most files first.
 
   Updated    Files v       Status  Review    Labels             Title                     Author

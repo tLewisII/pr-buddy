@@ -1,5 +1,5 @@
 pr-buddy  owner/project
-involves:@me 1-2 of 2  tab main  / filter  arrows/jk  view enter/v  checkout c  open o  refresh r  q
+involves:@me 1-2 of 2  tab main  / filter  arrows/jk  open enter  checkout c  refresh r  q
 
 
   involves:@me (2)
