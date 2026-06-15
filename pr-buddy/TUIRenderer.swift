@@ -40,7 +40,6 @@ final class TUIRenderer {
     }
 
     private let headers = ["Updated  ", "Files", "Status", "Review  ", "Labels", "Title", "Author"]
-    private let attentionHeaders = ["Title", "Status"]
     private let maximumWidths = [9, 18, 8, 18, 24, 72, 24]
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
@@ -185,46 +184,35 @@ final class TUIRenderer {
         terminalWidth: Int,
         terminalHeight: Int
     ) -> [String] {
-        let rows = tableRows(for: pullRequests)
+        let activePullRequests = isAttentionViewSelected ? attentionPullRequests : pullRequests
+        let rows = tableRows(for: activePullRequests)
         let headers = headers(
             updatedSortOrder: updatedSortOrder,
             fileSortOrder: fileSortOrder,
             reviewSortOrder: reviewSortOrder
         )
+        let activeSelectedIndex = isAttentionViewSelected ? attentionSelectedIndex : selectedIndex
+        let activeTopIndex = isAttentionViewSelected ? attentionTopIndex : topIndex
         let visibleRows = visibleListRows(terminalHeight: terminalHeight)
-        let endIndex = min(rows.count, topIndex + visibleRows)
+        let endIndex = min(rows.count, activeTopIndex + visibleRows)
         let repoText = options.repo ?? "current repository"
-        let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
+        let shownRange = rows.isEmpty ? "0 of 0" : "\(activeTopIndex + 1)-\(endIndex) of \(rows.count)"
 
-        let lines: [String]
-
-        if isAttentionViewSelected {
-            lines = attentionPullRequestListLines(
-                pullRequests: attentionPullRequests,
-                selectedIndex: attentionSelectedIndex,
-                topIndex: attentionTopIndex,
-                visibleRows: visibleRows,
-                repoText: repoText,
-                message: message,
-                terminalWidth: terminalWidth
-            )
-        } else {
-            lines = mainPullRequestListLines(
-                rows: rows,
-                headers: headers,
-                selectedIndex: selectedIndex,
-                topIndex: topIndex,
-                visibleRows: visibleRows,
-                isUpdatedHeaderSelected: isUpdatedHeaderSelected,
-                isFilesHeaderSelected: isFilesHeaderSelected,
-                isReviewHeaderSelected: isReviewHeaderSelected,
-                isMainViewSelected: isMainViewSelected,
-                repoText: repoText,
-                shownRange: shownRange,
-                message: message,
-                terminalWidth: terminalWidth
-            )
-        }
+        let lines = mainPullRequestListLines(
+            rows: rows,
+            headers: headers,
+            selectedIndex: activeSelectedIndex,
+            topIndex: activeTopIndex,
+            visibleRows: visibleRows,
+            isUpdatedHeaderSelected: isUpdatedHeaderSelected,
+            isFilesHeaderSelected: isFilesHeaderSelected,
+            isReviewHeaderSelected: isReviewHeaderSelected,
+            isListSelected: isMainViewSelected || isAttentionViewSelected,
+            repoText: repoText,
+            shownRange: shownRange,
+            message: message,
+            terminalWidth: terminalWidth
+        )
 
         return bottomAnchored(
             lines,
@@ -243,7 +231,7 @@ final class TUIRenderer {
         isUpdatedHeaderSelected: Bool,
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool,
-        isMainViewSelected: Bool,
+        isListSelected: Bool,
         repoText: String,
         shownRange: String,
         message: String,
@@ -276,53 +264,12 @@ final class TUIRenderer {
         }
 
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isMainViewSelected && index == selectedIndex
+            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isListSelected && index == selectedIndex
             let marker = isSelectedRow ? ">" : " "
             let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
 
             if isSelectedRow {
                 lines.append(TUIFormat.inverted(rendered))
-            } else {
-                lines.append(rendered)
-            }
-        }
-
-        return lines.map { clippedLine($0, to: terminalWidth) }
-    }
-
-    private func attentionPullRequestListLines(
-        pullRequests: [PullRequest],
-        selectedIndex: Int,
-        topIndex: Int,
-        visibleRows: Int,
-        repoText: String,
-        message: String,
-        terminalWidth: Int
-    ) -> [String] {
-        let rows = attentionTableRows(for: pullRequests)
-        let widths = attentionColumnWidths(rows: rows, availableWidth: max(20, terminalWidth - 2))
-        let endIndex = min(rows.count, topIndex + visibleRows)
-        let shownRange = rows.isEmpty ? "0 of 0" : "\(topIndex + 1)-\(endIndex) of \(rows.count)"
-
-        var lines = [
-            "pr-buddy  \(repoText)",
-            "involves:@me \(shownRange)  tab main  / filter  arrows/jk  open enter  checkout c  refresh r  q",
-            message.isEmpty ? " " : message,
-            "",
-            "  involves:@me (\(rows.count))",
-            "  " + renderAttentionCells(attentionHeaders, widths: widths)
-        ]
-
-        if rows.isEmpty {
-            lines.append("  No open pull requests involve you.")
-            return lines.map { clippedLine($0, to: terminalWidth) }
-        }
-
-        for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            let rendered = "  " + renderAttentionCells(rows[index], widths: widths)
-
-            if index == selectedIndex {
-                lines.append(TUIFormat.inverted(">\(rendered.dropFirst())"))
             } else {
                 lines.append(rendered)
             }
@@ -399,15 +346,6 @@ final class TUIRenderer {
         }
 
         return "\(value)m"
-    }
-
-    func attentionTableRows(for pullRequests: [PullRequest]) -> [[String]] {
-        pullRequests.map { pullRequest in
-            [
-                pullRequest.title,
-                pullRequest.statusSummary
-            ]
-        }
     }
 
     func fileSummary(for pullRequest: PullRequest) -> String {
@@ -606,21 +544,6 @@ final class TUIRenderer {
         }
 
         return widths
-    }
-
-    private func attentionColumnWidths(rows: [[String]], availableWidth: Int) -> [Int] {
-        let maximumWidths = [max(16, availableWidth - 10), 8]
-        return columnWidths(headers: attentionHeaders, rows: rows, maximumWidths: maximumWidths)
-    }
-
-    private func renderAttentionCells(_ row: [String], widths: [Int]) -> String {
-        row.enumerated()
-            .map { column, value in
-                let text = truncate(value, to: widths[column])
-                let paddedText = TUIFormat.padded(text, to: widths[column])
-                return column == 1 ? colorizedStatus(paddedText) : paddedText
-            }
-            .joined(separator: "  ")
     }
 
     private func clippedLine(_ line: String, to terminalWidth: Int) -> String {
