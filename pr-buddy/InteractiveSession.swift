@@ -243,7 +243,12 @@ enum InteractiveSession {
             try openSelectedPullRequest(state: &state, options: options)
             return false
         case .refresh:
-            try state.refresh(options: options)
+            try refreshPullRequests(
+                state: &state,
+                renderer: renderer,
+                terminalSize: terminalSize,
+                options: options
+            )
             return false
         case .showMain:
             state.showMainView()
@@ -257,6 +262,23 @@ enum InteractiveSession {
         case .quit:
             return true
         }
+    }
+
+    private static func refreshPullRequests(
+        state: inout State,
+        renderer: TUIRenderer,
+        terminalSize: TerminalSize,
+        options: Options
+    ) throws {
+        draw(
+            state: state,
+            renderer: renderer,
+            options: options,
+            terminalSize: terminalSize,
+            message: "",
+            inputBar: "Refreshing pull requests..."
+        )
+        try state.refresh(options: options)
     }
 
     private static func editTextFilter(
