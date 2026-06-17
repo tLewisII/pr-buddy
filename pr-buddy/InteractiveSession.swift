@@ -252,6 +252,9 @@ enum InteractiveSession {
                 terminalSize: &terminalSize,
                 options: &options
             )
+        case .help:
+            state.message = helpMessage
+            return false
         case .checkout:
             return try checkoutSelectedPullRequest(
                 state: &state,

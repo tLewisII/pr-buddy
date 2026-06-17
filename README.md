@@ -116,6 +116,7 @@ Use `pr-buddy --help` for the generated command reference.
 | `/` | Open slash commands. |
 | `r` | Refresh both views. |
 | `q` | Quit. |
+| `/help` | Show interactive keyboard help. |
 
 The `Updated`, `Files`, and `Review` headers cycle through ascending, descending, and unsorted order when selected and activated with `Enter`.
 

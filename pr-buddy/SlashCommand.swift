@@ -3,6 +3,7 @@ import Foundation
 enum InteractiveAction: Equatable {
     case filter
     case search
+    case help
     case checkout
     case open
     case refresh
@@ -22,6 +23,7 @@ enum SlashCommandRegistry {
     static let commands = [
         SlashCommand(name: "filter", description: "Filter pull requests by text", action: .filter),
         SlashCommand(name: "search", description: "Set GitHub search query and reload", action: .search),
+        SlashCommand(name: "help", description: "Show interactive keyboard help", action: .help),
         SlashCommand(name: "checkout", description: "Check out the selected pull request", action: .checkout),
         SlashCommand(name: "open", description: "Open the selected pull request in a browser", action: .open),
         SlashCommand(name: "refresh", description: "Refresh pull requests", action: .refresh),

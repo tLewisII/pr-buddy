@@ -386,11 +386,12 @@ final class PRBuddyTests: XCTestCase {
     func testSlashCommandRegistryPreservesPresentationOrderForEmptyQuery() {
         XCTAssertEqual(
             SlashCommandRegistry.filtered(by: "").map(\.name),
-            ["filter", "search", "checkout", "open", "refresh", "main", "attention", "quit"]
+            ["filter", "search", "help", "checkout", "open", "refresh", "main", "attention", "quit"]
         )
     }
 
     func testSlashCommandRegistryMatchesCaseInsensitivePrefixesAndExactNames() {
+        XCTAssertEqual(SlashCommandRegistry.filtered(by: "H").map(\.name), ["help"])
         XCTAssertEqual(SlashCommandRegistry.filtered(by: "R").map(\.name), ["refresh"])
         XCTAssertEqual(SlashCommandRegistry.filtered(by: "S").map(\.name), ["search"])
         XCTAssertEqual(SlashCommandRegistry.filtered(by: "search review-requested:@me").map(\.name), ["search"])

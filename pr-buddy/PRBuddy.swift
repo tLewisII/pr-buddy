@@ -48,6 +48,7 @@ private struct PRBuddyCommand: ParsableCommand {
           c              Checkout selected PR.
           r              Refresh PRs.
           q              Quit.
+          /help          Show interactive keyboard help.
 
         Use /filter to filter PRs by text or fields:
           esc             Clear the active filter.
