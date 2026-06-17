@@ -18,6 +18,7 @@ enum InteractiveSession {
             basePullRequests: initialPullRequests,
             attentionPullRequests: initialAttentionPullRequests
         )
+        var options = options
         var terminalSize = TerminalSize.current()
         var forceRedraw = true
 
@@ -62,7 +63,7 @@ enum InteractiveSession {
                     renderer: renderer,
                     eventReader: eventReader,
                     terminalSize: &terminalSize,
-                    options: options
+                    options: &options
                 ) {
                     return
                 }
@@ -73,7 +74,7 @@ enum InteractiveSession {
                     renderer: renderer,
                     eventReader: eventReader,
                     terminalSize: &terminalSize,
-                    options: options
+                    options: &options
                 ) {
                     return
                 }
@@ -84,7 +85,7 @@ enum InteractiveSession {
                     renderer: renderer,
                     eventReader: eventReader,
                     terminalSize: &terminalSize,
-                    options: options
+                    options: &options
                 ) {
                     return
                 }
@@ -119,7 +120,7 @@ enum InteractiveSession {
         renderer: TUIRenderer,
         eventReader: TerminalEventReader,
         terminalSize: inout TerminalSize,
-        options: Options
+        options: inout Options
     ) throws -> Bool {
         switch String(character).lowercased() {
         case "h":
@@ -136,7 +137,7 @@ enum InteractiveSession {
                 renderer: renderer,
                 eventReader: eventReader,
                 terminalSize: &terminalSize,
-                options: options
+                options: &options
             )
         default:
             guard let action = action(forShortcut: character) else {
@@ -150,7 +151,7 @@ enum InteractiveSession {
                 renderer: renderer,
                 eventReader: eventReader,
                 terminalSize: &terminalSize,
-                options: options
+                options: &options
             )
         }
 
@@ -162,7 +163,7 @@ enum InteractiveSession {
         renderer: TUIRenderer,
         eventReader: TerminalEventReader,
         terminalSize: inout TerminalSize,
-        options: Options
+        options: inout Options
     ) throws -> Bool {
         var commandState = SlashCommandState()
 
@@ -200,14 +201,15 @@ enum InteractiveSession {
                     continue
                 case .cancel:
                     return false
-                case .execute(let action):
+                case .execute(let action, let argument):
                     return try dispatch(
                         action,
+                        argument: argument,
                         state: &state,
                         renderer: renderer,
                         eventReader: eventReader,
                         terminalSize: &terminalSize,
-                        options: options
+                        options: &options
                     )
                 }
             }
@@ -216,11 +218,12 @@ enum InteractiveSession {
 
     private static func dispatch(
         _ action: InteractiveAction,
+        argument: String? = nil,
         state: inout State,
         renderer: TUIRenderer,
         eventReader: TerminalEventReader,
         terminalSize: inout TerminalSize,
-        options: Options
+        options: inout Options
     ) throws -> Bool {
         switch action {
         case .filter:
@@ -230,6 +233,24 @@ enum InteractiveSession {
                 eventReader: eventReader,
                 terminalSize: &terminalSize,
                 options: options
+            )
+        case .search:
+            if let argument {
+                return try applySearchQueryAndRefresh(
+                    argument,
+                    state: &state,
+                    renderer: renderer,
+                    terminalSize: terminalSize,
+                    options: &options
+                )
+            }
+
+            return try editSearchQuery(
+                state: &state,
+                renderer: renderer,
+                eventReader: eventReader,
+                terminalSize: &terminalSize,
+                options: &options
             )
         case .checkout:
             return try checkoutSelectedPullRequest(
@@ -264,6 +285,29 @@ enum InteractiveSession {
         }
     }
 
+    static func applySearchQuery(_ query: String, to options: inout Options) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        options.search = trimmedQuery.isEmpty ? nil : trimmedQuery
+    }
+
+    private static func applySearchQueryAndRefresh(
+        _ query: String,
+        state: inout State,
+        renderer: TUIRenderer,
+        terminalSize: TerminalSize,
+        options: inout Options
+    ) throws -> Bool {
+        applySearchQuery(query, to: &options)
+        try refreshPullRequests(
+            state: &state,
+            renderer: renderer,
+            terminalSize: terminalSize,
+            options: options
+        )
+        state.message = "Search: \(options.search ?? "none"). \(state.message)"
+        return false
+    }
+
     private static func refreshPullRequests(
         state: inout State,
         renderer: TUIRenderer,
@@ -279,6 +323,58 @@ enum InteractiveSession {
             inputBar: "Refreshing pull requests..."
         )
         try state.refresh(options: options)
+    }
+
+    private static func editSearchQuery(
+        state: inout State,
+        renderer: TUIRenderer,
+        eventReader: TerminalEventReader,
+        terminalSize: inout TerminalSize,
+        options: inout Options
+    ) throws -> Bool {
+        var query = options.search ?? ""
+
+        while true {
+            state.keepSelectionsVisible(
+                visibleRows: renderer.visibleListRows(terminalHeight: terminalSize.rows)
+            )
+            draw(
+                state: state,
+                renderer: renderer,
+                options: options,
+                terminalSize: terminalSize,
+                message: "",
+                inputBar: "Search: \(query)_  enter reload  esc cancel  ctrl-u clear"
+            )
+
+            switch eventReader.nextEvent() {
+            case .resize(let size):
+                terminalSize = size
+                renderer.invalidateScreen()
+            case .interrupt, .endOfInput, .key(.interrupt):
+                return true
+            case .key(.character(let character)):
+                query.append(character)
+            case .key(.backspace):
+                if !query.isEmpty {
+                    query.removeLast()
+                }
+            case .key(.enter):
+                return try applySearchQueryAndRefresh(
+                    query,
+                    state: &state,
+                    renderer: renderer,
+                    terminalSize: terminalSize,
+                    options: &options
+                )
+            case .key(.escape):
+                return false
+            case .key(.clear):
+                query = ""
+            case .key:
+                continue
+            }
+        }
     }
 
     private static func editTextFilter(

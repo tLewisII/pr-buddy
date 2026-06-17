@@ -55,6 +55,10 @@ private struct PRBuddyCommand: ParsableCommand {
           label:bug,ui    Require labels.
           files:2..8      Match changed-file count or range.
           reviews:1..     Match review count or range.
+
+        Use /search <query> to set the GitHub search query and reload:
+          /search is:open author:@me
+          /search review-requested:@me
         """
     )
 

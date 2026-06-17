@@ -113,15 +113,15 @@ Use `pr-buddy --help` for the generated command reference.
 | `Enter` | Open the selected PR in a browser, or change the selected column's sort order. |
 | `c` | Check out the selected PR with `gh pr checkout`. |
 | `Tab` | Toggle between the main and `involves:@me` views. |
-| `/` | Filter the displayed PR list by text. |
+| `/` | Open slash commands. |
 | `r` | Refresh both views. |
 | `q` | Quit. |
 
 The `Updated`, `Files`, and `Review` headers cycle through ascending, descending, and unsorted order when selected and activated with `Enter`.
 
-### Interactive filtering
+### Interactive filtering and search
 
-Press `/` to narrow the displayed PR list with a text query. Text matches PR numbers, titles, authors, branches, and labels. Multiple terms must all match.
+Use `/filter` to narrow the displayed PR list with a local text query. Text matches PR numbers, titles, authors, branches, and labels. Multiple terms must all match.
 
 ```text
 checkout alex
@@ -129,7 +129,9 @@ checkout alex
 needs-review cli
 ```
 
-While editing a filter, press `Enter` to apply it, `Ctrl-U` to clear it, or `Esc` to cancel.
+While editing a filter, press `Enter` to apply it, `Ctrl-U` to clear it, or `Esc` to clear the active filter.
+
+Use `/search <query>` to reload with a new GitHub search query passed to `gh pr list --search`. Running `/search` without a query opens an editor; pressing `Enter` reloads, `Ctrl-U` clears the query, and `Esc` cancels without reloading.
 
 ## Non-interactive output
 

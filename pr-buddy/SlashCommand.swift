@@ -2,6 +2,7 @@ import Foundation
 
 enum InteractiveAction: Equatable {
     case filter
+    case search
     case checkout
     case open
     case refresh
@@ -20,6 +21,7 @@ struct SlashCommand: Equatable {
 enum SlashCommandRegistry {
     static let commands = [
         SlashCommand(name: "filter", description: "Filter pull requests by text", action: .filter),
+        SlashCommand(name: "search", description: "Set GitHub search query and reload", action: .search),
         SlashCommand(name: "checkout", description: "Check out the selected pull request", action: .checkout),
         SlashCommand(name: "open", description: "Open the selected pull request in a browser", action: .open),
         SlashCommand(name: "refresh", description: "Refresh pull requests", action: .refresh),
@@ -33,13 +35,24 @@ enum SlashCommandRegistry {
             return commands
         }
 
-        let normalizedQuery = normalized(query)
+        let normalizedQuery = normalizedCommandName(query)
         return commands.filter { $0.name.lowercased().hasPrefix(normalizedQuery) }
     }
 
     static func exactMatch(for query: String) -> SlashCommand? {
-        let normalizedQuery = normalized(query)
+        let normalizedQuery = normalizedCommandName(query)
         return commands.first { $0.name.lowercased() == normalizedQuery }
+    }
+
+    static func argument(for query: String) -> String? {
+        let normalizedQuery = normalized(query)
+        guard let separatorIndex = normalizedQuery.firstIndex(where: { $0.isWhitespace }) else {
+            return nil
+        }
+
+        let argument = normalizedQuery[separatorIndex...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return argument.isEmpty ? nil : argument
     }
 
     private static func normalized(_ query: String) -> String {
@@ -47,14 +60,20 @@ enum SlashCommandRegistry {
         if normalizedQuery.first == "/" {
             normalizedQuery.removeFirst()
         }
-        return normalizedQuery.lowercased()
+        return normalizedQuery
+    }
+
+    private static func normalizedCommandName(_ query: String) -> String {
+        let normalizedQuery = normalized(query)
+        let commandName = normalizedQuery.split(whereSeparator: \.isWhitespace).first ?? ""
+        return commandName.lowercased()
     }
 }
 
 enum SlashCommandTransition: Equatable {
     case continueEditing
     case cancel
-    case execute(InteractiveAction)
+    case execute(InteractiveAction, argument: String?)
 }
 
 struct SlashCommandState: Equatable {
@@ -179,7 +198,7 @@ struct SlashCommandState: Equatable {
             guard let command = commandForExecution else {
                 return .continueEditing
             }
-            return .execute(command.action)
+            return .execute(command.action, argument: SlashCommandRegistry.argument(for: query))
         case .backspace:
             return backspace() ? .continueEditing : .cancel
         case .clear:

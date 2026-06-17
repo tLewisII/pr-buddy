@@ -386,12 +386,15 @@ final class PRBuddyTests: XCTestCase {
     func testSlashCommandRegistryPreservesPresentationOrderForEmptyQuery() {
         XCTAssertEqual(
             SlashCommandRegistry.filtered(by: "").map(\.name),
-            ["filter", "checkout", "open", "refresh", "main", "attention", "quit"]
+            ["filter", "search", "checkout", "open", "refresh", "main", "attention", "quit"]
         )
     }
 
     func testSlashCommandRegistryMatchesCaseInsensitivePrefixesAndExactNames() {
         XCTAssertEqual(SlashCommandRegistry.filtered(by: "R").map(\.name), ["refresh"])
+        XCTAssertEqual(SlashCommandRegistry.filtered(by: "S").map(\.name), ["search"])
+        XCTAssertEqual(SlashCommandRegistry.filtered(by: "search review-requested:@me").map(\.name), ["search"])
+        XCTAssertEqual(SlashCommandRegistry.argument(for: "/search review-requested:@me"), "review-requested:@me")
         XCTAssertEqual(SlashCommandRegistry.filtered(by: "ATTen").map(\.name), ["attention"])
         XCTAssertEqual(SlashCommandRegistry.exactMatch(for: "/OPEN")?.action, .open)
         XCTAssertNil(SlashCommandRegistry.exactMatch(for: "unknown"))
@@ -427,8 +430,11 @@ final class PRBuddyTests: XCTestCase {
         for command in SlashCommandRegistry.commands {
             var state = SlashCommandState(query: command.name)
 
-            XCTAssertEqual(state.handle(.enter), .execute(command.action))
+            XCTAssertEqual(state.handle(.enter), .execute(command.action, argument: nil))
         }
+
+        var searchState = SlashCommandState(query: "search review-requested:@me")
+        XCTAssertEqual(searchState.handle(.enter), .execute(.search, argument: "review-requested:@me"))
     }
 
     func testSlashCommandCancelClearAndNoMatchBehavior() {
@@ -452,6 +458,16 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(InteractiveSession.action(forShortcut: "q"), SlashCommandRegistry.exactMatch(for: "quit")?.action)
         XCTAssertNil(InteractiveSession.action(forShortcut: "o"))
         XCTAssertNil(InteractiveSession.action(forShortcut: "v"))
+    }
+
+    func testApplySearchQueryTrimsAndClearsSearchOption() {
+        var options = Options()
+
+        InteractiveSession.applySearchQuery("  review-requested:@me  ", to: &options)
+        XCTAssertEqual(options.search, "review-requested:@me")
+
+        InteractiveSession.applySearchQuery("   ", to: &options)
+        XCTAssertNil(options.search)
     }
 
     func testSlashCommandViewActionsUseExistingViewState() {
