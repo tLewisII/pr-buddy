@@ -1042,6 +1042,108 @@ final class PRBuddyTests: XCTestCase {
         }
     }
 
+    func testMainPullRequestListDropsLabelsColumnWhenTerminalIsNarrow() {
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [
+                makePullRequest(
+                    title: "Keep title visible in compact terminals",
+                    author: PullRequest.Author(login: "terry"),
+                    labels: ["compact-label"]
+                )
+            ],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainViewSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionViewSelected: false,
+            options: Options(),
+            message: "",
+            terminalWidth: 72,
+            terminalHeight: 14
+        )
+
+        XCTAssertFalse(rendered.contains("Labels"))
+        XCTAssertFalse(rendered.contains("compact-label"))
+        XCTAssertTrue(rendered.contains("Keep title visible"))
+        XCTAssertFalse(rendered.contains("terry"))
+    }
+
+    func testMainPullRequestListDropsStatusColumnWhenTerminalIsNarrower() {
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [
+                makePullRequest(
+                    title: "Keep compact status width available for title text",
+                    state: "MERGED",
+                    labels: ["compact-label"]
+                )
+            ],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: false,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainViewSelected: true,
+            updatedSortOrder: .none,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionViewSelected: false,
+            options: Options(),
+            message: "",
+            terminalWidth: 80,
+            terminalHeight: 14
+        )
+
+        XCTAssertFalse(rendered.contains("Labels"))
+        XCTAssertFalse(rendered.contains("Status"))
+        XCTAssertFalse(rendered.contains("MERGED"))
+        XCTAssertTrue(rendered.contains("Keep compact status width"))
+    }
+
+    func testMainPullRequestListDropsUpdatedColumnAtSmallestWidths() {
+        let rendered = TUIRenderer(now: { Self.date("2026-06-01T12:00:00Z") }).renderPullRequestList(
+            pullRequests: [
+                makePullRequest(
+                    title: "Keep smallest terminal focused on title",
+                    labels: ["compact-label"]
+                )
+            ],
+            selectedIndex: 0,
+            topIndex: 0,
+            isUpdatedHeaderSelected: true,
+            isFilesHeaderSelected: false,
+            isReviewHeaderSelected: false,
+            isMainViewSelected: true,
+            updatedSortOrder: .descending,
+            fileSortOrder: .none,
+            reviewSortOrder: .none,
+            attentionPullRequests: [],
+            attentionSelectedIndex: 0,
+            attentionTopIndex: 0,
+            isAttentionViewSelected: false,
+            options: Options(),
+            message: "",
+            terminalWidth: 64,
+            terminalHeight: 14
+        )
+
+        XCTAssertFalse(rendered.contains("Labels"))
+        XCTAssertFalse(rendered.contains("Status"))
+        XCTAssertFalse(rendered.contains("Updated"))
+        XCTAssertTrue(rendered.contains("Keep smallest"))
+        XCTAssertTrue(rendered.contains(">"))
+    }
+
     func testMainPullRequestListUsesAvailableWidthBeforeTruncatingColumns() {
         let title = "Add a wide integer fast path for addition and subtraction without truncating useful context"
         let pullRequest = makePullRequest(

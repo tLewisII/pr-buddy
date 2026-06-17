@@ -18,6 +18,8 @@ final class TUIRenderer {
         case author
         case unknown
 
+        static let all: [TableColumn] = [.updated, .files, .status, .review, .labels, .title, .author]
+
         init(index: Int) {
             if index == 0 {
                 self = .updated
@@ -37,10 +39,36 @@ final class TUIRenderer {
                 self = .unknown
             }
         }
+
+        var sourceIndex: Int {
+            switch self {
+            case .updated:
+                return 0
+            case .files:
+                return 1
+            case .status:
+                return 2
+            case .review:
+                return 3
+            case .labels:
+                return 4
+            case .title:
+                return 5
+            case .author:
+                return 6
+            case .unknown:
+                return Int.max
+            }
+        }
     }
 
     private let headers = ["Updated  ", "Files", "Status", "Review  ", "Labels", "Title", "Author"]
     private let maximumWidths = [9, 18, 8, 18, 36, 72, 32]
+    private let compactLabelsColumnThreshold = 140
+    private let compactStatusColumnThreshold = 112
+    private let compactUpdatedColumnThreshold = 96
+    private let compactAuthorColumnThreshold = 84
+    private let compactReviewColumnThreshold = 72
     private let now: () -> Date
     private let updatedAtParser = ISO8601DateFormatter()
     private let updatedComponentsFormatter = DateComponentsFormatter()
@@ -252,9 +280,13 @@ final class TUIRenderer {
         message: String,
         terminalWidth: Int
     ) -> [String] {
+        let columns = mainViewColumns(availableWidth: terminalWidth)
+        let rows = visibleColumns(columns, in: rows)
+        let headers = visibleColumns(columns, in: headers)
         let widths = mainViewColumnWidths(
             headers: headers,
             rows: rows,
+            columns: columns,
             availableWidth: terminalWidth
         )
 
@@ -266,6 +298,7 @@ final class TUIRenderer {
             "  " + renderHeaderRow(
                 headers,
                 widths: widths,
+                columns: columns,
                 isUpdatedHeaderSelected: isUpdatedHeaderSelected,
                 isFilesHeaderSelected: isFilesHeaderSelected,
                 isReviewHeaderSelected: isReviewHeaderSelected
@@ -278,10 +311,14 @@ final class TUIRenderer {
             return lines.map { clippedLine($0, to: terminalWidth) }
         }
 
+        let hasSelectedVisibleHeader = (isUpdatedHeaderSelected && columns.contains(.updated))
+            || (isFilesHeaderSelected && columns.contains(.files))
+            || (isReviewHeaderSelected && columns.contains(.review))
+
         for index in topIndex..<min(rows.count, topIndex + visibleRows) {
-            let isSelectedRow = !isUpdatedHeaderSelected && !isFilesHeaderSelected && !isReviewHeaderSelected && isListSelected && index == selectedIndex
+            let isSelectedRow = !hasSelectedVisibleHeader && isListSelected && index == selectedIndex
             let marker = isSelectedRow ? ">" : " "
-            let rendered = "\(marker) " + renderRow(rows[index], widths: widths)
+            let rendered = "\(marker) " + renderRow(rows[index], widths: widths, columns: columns)
 
             if isSelectedRow {
                 lines.append(TUIFormat.inverted(rendered))
@@ -390,12 +427,16 @@ final class TUIRenderer {
     }
 
     func renderRow(_ row: [String], widths: [Int]) -> String {
+        renderRow(row, widths: widths, columns: TableColumn.all)
+    }
+
+    private func renderRow(_ row: [String], widths: [Int], columns: [TableColumn]) -> String {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
                 let paddedText = TUIFormat.padded(text, to: widths[column])
 
-                switch TableColumn(index: column) {
+                switch columns[column] {
                 case .updated, .author:
                     return TUIFormat.colorized(paddedText, color: TUIFormat.Color.metadata)
                 case .files:
@@ -455,20 +496,38 @@ final class TUIRenderer {
         isFilesHeaderSelected: Bool,
         isReviewHeaderSelected: Bool
     ) -> String {
+        renderHeaderRow(
+            row,
+            widths: widths,
+            columns: TableColumn.all,
+            isUpdatedHeaderSelected: isUpdatedHeaderSelected,
+            isFilesHeaderSelected: isFilesHeaderSelected,
+            isReviewHeaderSelected: isReviewHeaderSelected
+        )
+    }
+
+    private func renderHeaderRow(
+        _ row: [String],
+        widths: [Int],
+        columns: [TableColumn],
+        isUpdatedHeaderSelected: Bool,
+        isFilesHeaderSelected: Bool,
+        isReviewHeaderSelected: Bool
+    ) -> String {
         row.enumerated()
             .map { column, value in
                 let text = truncate(value, to: widths[column])
                 let paddedText = TUIFormat.padded(text, to: widths[column])
 
-                if column == 0, isUpdatedHeaderSelected {
+                if columns[column] == .updated, isUpdatedHeaderSelected {
                     return TUIFormat.inverted(paddedText)
                 }
 
-                if column == 1, isFilesHeaderSelected {
+                if columns[column] == .files, isFilesHeaderSelected {
                     return TUIFormat.inverted(paddedText)
                 }
 
-                if column == 3, isReviewHeaderSelected {
+                if columns[column] == .review, isReviewHeaderSelected {
                     return TUIFormat.inverted(paddedText)
                 }
 
@@ -539,15 +598,20 @@ final class TUIRenderer {
     private func mainViewColumnWidths(
         headers: [String],
         rows: [[String]],
+        columns: [TableColumn],
         availableWidth: Int
     ) -> [Int] {
-        let minimumWidths = [9, 5, 4, 8, 6, 5, 6]
+        let minimumWidths = visibleColumns(columns, in: [9, 5, 4, 8, 6, 5, 6])
         let separatorWidth = (headers.count - 1) * 2 + 2
-        var responsiveMaximumWidths = maximumWidths
-        responsiveMaximumWidths[5] = max(
-            responsiveMaximumWidths[5],
-            availableWidth - separatorWidth
-        )
+        var responsiveMaximumWidths = visibleColumns(columns, in: maximumWidths)
+
+        if let titleIndex = columns.firstIndex(of: .title) {
+            responsiveMaximumWidths[titleIndex] = max(
+                responsiveMaximumWidths[titleIndex],
+                availableWidth - separatorWidth
+            )
+        }
+
         var widths = columnWidths(
             headers: headers,
             rows: rows,
@@ -555,7 +619,13 @@ final class TUIRenderer {
         )
         var overflow = widths.reduce(0, +) + separatorWidth - availableWidth
 
-        for column in [5, 4, 6, 3, 1, 2, 0] where overflow > 0 {
+        let shrinkPriority: [TableColumn] = [.title, .labels, .author, .review, .files, .status, .updated]
+
+        for tableColumn in shrinkPriority where overflow > 0 {
+            guard let column = columns.firstIndex(of: tableColumn) else {
+                continue
+            }
+
             let minimumWidth = min(widths[column], minimumWidths[column])
             let shrinkAmount = min(overflow, widths[column] - minimumWidth)
             widths[column] -= shrinkAmount
@@ -563,6 +633,33 @@ final class TUIRenderer {
         }
 
         return widths
+    }
+
+    private func mainViewColumns(availableWidth: Int) -> [TableColumn] {
+        TableColumn.all.filter { column in
+            switch column {
+            case .labels:
+                return availableWidth >= compactLabelsColumnThreshold
+            case .status:
+                return availableWidth >= compactStatusColumnThreshold
+            case .updated:
+                return availableWidth >= compactUpdatedColumnThreshold
+            case .author:
+                return availableWidth >= compactAuthorColumnThreshold
+            case .review:
+                return availableWidth >= compactReviewColumnThreshold
+            case .files, .title, .unknown:
+                return true
+            }
+        }
+    }
+
+    private func visibleColumns<T>(_ columns: [TableColumn], in values: [T]) -> [T] {
+        columns.map { values[$0.sourceIndex] }
+    }
+
+    private func visibleColumns<T>(_ columns: [TableColumn], in rows: [[T]]) -> [[T]] {
+        rows.map { visibleColumns(columns, in: $0) }
     }
 
     private func clippedLine(_ line: String, to terminalWidth: Int) -> String {
