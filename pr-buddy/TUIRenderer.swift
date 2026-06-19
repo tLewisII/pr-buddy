@@ -62,7 +62,7 @@ final class TUIRenderer {
         }
     }
 
-    private let headers = ["Updated  ", "Files", "Status", "Review  ", "Labels", "Title", "Author"]
+    private let headers = ["Updated  ", "Files", "Status", "Reviews  ", "Labels", "Title", "Author"]
     private let maximumWidths = [9, 18, 8, 18, 36, 72, 32]
     private let compactLabelsColumnThreshold = 140
     private let compactStatusColumnThreshold = 112
@@ -357,7 +357,7 @@ final class TUIRenderer {
                 updatedSummary(for: pullRequest),
                 fileSummary(for: pullRequest),
                 pullRequest.statusSummary,
-                pullRequest.reviewSummary,
+                reviewIconSummary(for: pullRequest),
                 pullRequest.labelSummary.isEmpty ? "-" : pullRequest.labelSummary,
                 pullRequest.title,
                 pullRequest.author?.login ?? "-"
@@ -479,11 +479,11 @@ final class TUIRenderer {
 
         switch reviewSortOrder {
         case .none:
-            headers[3] = "Review  "
+            headers[3] = "Reviews  "
         case .ascending:
-            headers[3] = "Review ^"
+            headers[3] = "Reviews ^"
         case .descending:
-            headers[3] = "Review v"
+            headers[3] = "Reviews v"
         }
 
         return headers
@@ -556,6 +556,16 @@ final class TUIRenderer {
         .joined()
     }
 
+    func reviewIconSummary(for pullRequest: PullRequest) -> String {
+        let parts = pullRequest.reviewSummary.split(separator: " ").map(String.init)
+
+        guard let firstPart = parts.first, Int(firstPart) != nil else {
+            return pullRequest.reviewSummary
+        }
+
+        return parts.dropFirst().joined(separator: " ")
+    }
+
     func colorizedFileSummary(_ value: String) -> String {
         value
             .split(separator: " ", omittingEmptySubsequences: false)
@@ -601,7 +611,7 @@ final class TUIRenderer {
         columns: [TableColumn],
         availableWidth: Int
     ) -> [Int] {
-        let minimumWidths = visibleColumns(columns, in: [9, 5, 4, 8, 6, 5, 6])
+        let minimumWidths = visibleColumns(columns, in: [9, 5, 4, 9, 6, 5, 6])
         let separatorWidth = (headers.count - 1) * 2 + 2
         var responsiveMaximumWidths = visibleColumns(columns, in: maximumWidths)
 

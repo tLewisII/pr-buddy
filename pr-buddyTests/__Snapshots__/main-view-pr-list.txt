@@ -2,7 +2,7 @@ pr-buddy  owner/project
 Showing 1-2 of 2  tab switch  / commands  arrows/jk  enter web  c checkout  r refresh  q
 Sorted by most files first.
 
-  Updated    Files v       Review    Title                                              Author
-  ---------  ------------  --------  -------------------------------------------------  ----------
-  1w         3 +12 -4      1         Fix checkout flow                                  terry
-> 1w         12 +1200 -50  3         Ship snapshot renderer that truncates long titles  alexandria
+  Updated    Files v       Reviews    Title                                              Author
+  ---------  ------------  ---------  -------------------------------------------------  ----------
+  1w         3 +12 -4                 Fix checkout flow                                  terry
+> 1w         12 +1200 -50             Ship snapshot renderer that truncates long titles  alexandria

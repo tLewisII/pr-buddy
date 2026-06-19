@@ -2,7 +2,7 @@ pr-buddy  owner/project
 Showing 1-2 of 2  tab switch  / commands  arrows/jk  enter web  c checkout  r refresh  q
 
 
-  Updated    Files     Review    Title                  Author
-  ---------  --------  --------  ---------------------  ------
-  1w         3 +12 -4  1         Update release notes   terry
-> 1w         3 +12 -4  1         Tighten parser errors  terry
+  Updated    Files     Reviews    Title                  Author
+  ---------  --------  ---------  ---------------------  ------
+  1w         3 +12 -4             Update release notes   terry
+> 1w         3 +12 -4             Tighten parser errors  terry

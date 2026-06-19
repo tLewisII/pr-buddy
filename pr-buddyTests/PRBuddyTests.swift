@@ -713,7 +713,7 @@ final class PRBuddyTests: XCTestCase {
 
         XCTAssertEqual(rows[0][0], "1w")
         XCTAssertEqual(rows[0][1], "-")
-        XCTAssertEqual(rows[0][3], "0")
+        XCTAssertEqual(rows[0][3], "")
         XCTAssertEqual(rows[0][4], "-")
         XCTAssertEqual(rows[0][6], "-")
     }
@@ -749,7 +749,7 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(renderer.tableRows(for: [makePullRequest(updatedAt: "not-a-date")])[0][0], "-")
     }
 
-    func testTableRowsFormatsReviewCountAndStatusIcons() {
+    func testTableRowsFormatsReviewStatusIconsWithoutLeadingCount() {
         let pullRequest = makePullRequest(
             reviewDecision: nil,
             reviews: nil,
@@ -758,7 +758,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "3 ✓ ✕ 🗨︎ 1")
+        XCTAssertEqual(rows[0][3], "✓ ✕ 🗨︎ 1")
     }
 
     func testTableRowsDoesNotInferApprovalIconsFromReviewDecision() {
@@ -770,7 +770,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "3")
+        XCTAssertEqual(rows[0][3], "")
     }
 
     func testTableRowsCollapsesMoreThanThreeApprovalIcons() {
@@ -782,7 +782,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "4 ✓ 4")
+        XCTAssertEqual(rows[0][3], "✓ 4")
     }
 
     func testTableRowsShowsUpToThreeApprovalIcons() {
@@ -794,7 +794,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "3 ✓ ✓ ✓")
+        XCTAssertEqual(rows[0][3], "✓ ✓ ✓")
     }
 
     func testTableRowsAlwaysCollapsesCommentIconsWithCount() {
@@ -806,7 +806,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "3 🗨︎ 3")
+        XCTAssertEqual(rows[0][3], "🗨︎ 3")
     }
 
     func testTableRowsFormatsChangedFileStats() {
@@ -840,9 +840,9 @@ final class PRBuddyTests: XCTestCase {
     func testHeadersShowReviewSortState() {
         let renderer = TUIRenderer()
 
-        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none, reviewSortOrder: .none)[3], "Review  ")
-        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none, reviewSortOrder: .ascending)[3], "Review ^")
-        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none, reviewSortOrder: .descending)[3], "Review v")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none, reviewSortOrder: .none)[3], "Reviews  ")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none, reviewSortOrder: .ascending)[3], "Reviews ^")
+        XCTAssertEqual(renderer.headers(updatedSortOrder: .none, fileSortOrder: .none, reviewSortOrder: .descending)[3], "Reviews v")
     }
 
     func testUpdatedColumnWidthDoesNotChangeWhenSorting() {
@@ -881,10 +881,10 @@ final class PRBuddyTests: XCTestCase {
             isReviewHeaderSelected: false
         )
 
-        XCTAssertEqual(unsortedWidths[3], 8)
-        XCTAssertEqual(widths[3], 8)
-        XCTAssertTrue(rendered.contains("Review v"))
-        XCTAssertFalse(rendered.contains("Revie..."))
+        XCTAssertEqual(unsortedWidths[3], 9)
+        XCTAssertEqual(widths[3], 9)
+        XCTAssertTrue(rendered.contains("Reviews v"))
+        XCTAssertFalse(rendered.contains("Review..."))
     }
 
     func testRenderHeaderRowHighlightsSelectedSortableHeaderOnly() {
