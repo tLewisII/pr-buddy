@@ -1,5 +1,5 @@
 pr-buddy  owner/project
-Showing 1-2 of 2  tab switch  / commands  arrows/jk  enter web  c checkout  r refresh  q
+Showing 1-2 of 2  tab switch  / commands  move arrows/j/k  enter web  c checkout  r refresh  q quit
 Sorted by most files first.
 
   Updated    Files v       Reviews    Title                                              Author

@@ -292,7 +292,7 @@ final class TUIRenderer {
 
         var lines = [
             "pr-buddy  \(repoText)",
-            "Showing \(shownRange)  tab switch  / commands  arrows/jk  enter web  c checkout  r refresh  q",
+            "Showing \(shownRange)  tab switch  / commands  move arrows/j/k  enter web  c checkout  r refresh  q quit",
             message.isEmpty ? " " : message,
             "",
             "  " + renderHeaderRow(
