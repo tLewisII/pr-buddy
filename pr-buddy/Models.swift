@@ -149,7 +149,7 @@ struct PullRequest: Decodable {
             case "changes requested":
                 return Array(repeating: "✕", count: count)
             case "commented":
-                return ["🗨︎", String(count)]
+                return ["✉", String(count)]
             default:
                 return []
             }

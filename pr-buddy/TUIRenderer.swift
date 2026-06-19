@@ -547,7 +547,7 @@ final class TUIRenderer {
                 return TUIFormat.colorized(String(character), color: TUIFormat.Color.openStatus)
             case "✕":
                 return TUIFormat.colorized(String(character), color: TUIFormat.Color.closedStatus)
-            case "🗨", "🗨︎":
+            case "✉":
                 return TUIFormat.colorized(String(character), color: TUIFormat.Color.metadata)
             default:
                 return String(character)

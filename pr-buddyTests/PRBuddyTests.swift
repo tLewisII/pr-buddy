@@ -758,7 +758,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "✓ ✕ 🗨︎ 1")
+        XCTAssertEqual(rows[0][3], "✓ ✕ ✉ 1")
     }
 
     func testTableRowsDoesNotInferApprovalIconsFromReviewDecision() {
@@ -806,7 +806,7 @@ final class PRBuddyTests: XCTestCase {
 
         let rows = TUIRenderer().tableRows(for: [pullRequest])
 
-        XCTAssertEqual(rows[0][3], "🗨︎ 3")
+        XCTAssertEqual(rows[0][3], "✉ 3")
     }
 
     func testTableRowsFormatsChangedFileStats() {
@@ -927,16 +927,16 @@ final class PRBuddyTests: XCTestCase {
         XCTAssertEqual(renderer.truncate("abc", to: 5), "abc")
     }
 
-    func testTerminalFormattingUsesDisplayWidthForCommentIcon() {
-        XCTAssertEqual(TUIFormat.visibleLength("3 ✓ ✕ 🗨︎"), 7)
-        XCTAssertEqual(TUIFormat.visibleLength(TUIFormat.padded("3 ✓ ✕ 🗨︎", to: 10)), 10)
-        XCTAssertEqual(TUIFormat.truncate("ab🗨︎cde", to: 5), "ab...")
+    func testTerminalFormattingUsesSingleWidthReviewIcons() {
+        XCTAssertEqual(TUIFormat.visibleLength("✓ ✕ ✉"), 5)
+        XCTAssertEqual(TUIFormat.visibleLength(TUIFormat.padded("✓ ✕ ✉", to: 10)), 10)
+        XCTAssertEqual(TUIFormat.truncate("ab✉cde", to: 5), "ab...")
     }
 
     func testRenderRowKeepsColumnsAlignedAfterCommentIcon() {
         let renderer = TUIRenderer()
         let rendered = renderer.renderRow(
-            ["#42", "3", "open", "1 🗨︎", "-", "Title", "terry"],
+            ["#42", "3", "open", "✉ 1", "-", "Title", "terry"],
             widths: [3, 1, 4, 5, 1, 5, 5]
         )
 
@@ -974,8 +974,8 @@ final class PRBuddyTests: XCTestCase {
         let renderer = TUIRenderer()
 
         XCTAssertEqual(
-            renderer.colorizedReviewSummary("3 ✓ ✕ 🗨︎"),
-            "3 \u{001B}[38;2;31;136;61m✓\u{001B}[39m \u{001B}[38;2;207;34;46m✕\u{001B}[39m \u{001B}[38;2;89;99;110m🗨︎\u{001B}[39m"
+            renderer.colorizedReviewSummary("✓ ✕ ✉"),
+            "\u{001B}[38;2;31;136;61m✓\u{001B}[39m \u{001B}[38;2;207;34;46m✕\u{001B}[39m \u{001B}[38;2;89;99;110m✉\u{001B}[39m"
         )
     }
 
